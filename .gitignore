@@ -1,0 +1,31 @@
+# But keep the Code folder
+!Code/
+
+# Inside Code, ignore compiled/cache/temp files
+Code/**/__pycache__/
+Code/**/*.pyc
+Code/**/*.pyo
+Code/**/*.log
+Code/**/*.tmp
+
+# Ignore virtual environments
+**/.venv/
+**/venv/
+**/ENV/
+**/env/
+
+# Ignore OS and editor files
+.DS_Store
+.vscode/
+.idea/
+
+# Ignore credentials and documents
+*.csv
+**/*key*
+**/*Key*
+**/*access*
+**/*credential*
+**/*secret*
+*.docx
+*.xlsx
+*.pdf
