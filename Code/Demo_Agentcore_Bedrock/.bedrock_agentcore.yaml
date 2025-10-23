@@ -6,6 +6,15 @@ agents:
     platform: linux/arm64
     container_runtime: none
     source_path: /Users/sohampatil/Documents/Projects/NexAI - AWS AI Hackathon/Code/Demo_Agentcore_Bedrock
+    env:
+    - name: AWS_REGION
+      value: us-east-1
+    - name: AGENT_ID
+      alue: DYOPALGMYF
+    - name: AGENT_ALIAS_ID
+      value: Y5ERCMDBRX   # from console → Agent → Aliases
+    - name: COURSE_KB_ID
+      value: 2BA9XEXYD4   
     aws:
       execution_role: arn:aws:iam::897722666599:role/AmazonBedrockAgentCoreSDKRuntime-us-east-1-9c0804ec0c
       execution_role_auto_create: false

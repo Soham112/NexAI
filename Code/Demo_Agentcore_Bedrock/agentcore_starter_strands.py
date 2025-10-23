@@ -1,224 +1,197 @@
-"""
-Strands Agent sample with AgentCore + Course Catalog KB integration
-"""
-import os
-from strands import Agent, tool
-from bedrock_agentcore.memory.integrations.strands.config import (
-    AgentCoreMemoryConfig,
-    RetrievalConfig,
-)
-from bedrock_agentcore.memory.integrations.strands.session_manager import (
-    AgentCoreMemorySessionManager,
-)
-from bedrock_agentcore.tools.code_interpreter_client import CodeInterpreter
-from bedrock_agentcore.runtime import BedrockAgentCoreApp
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 
-# --- App bootstrap ---
-app = BedrockAgentCoreApp()
+import json, os, sys
+from typing import Dict
 
-# --- Environment ---
-MEMORY_ID = os.getenv("BEDROCK_AGENTCORE_MEMORY_ID")
-REGION = os.getenv("AWS_REGION", "us-east-1")
-MODEL_ID = os.getenv(
-    "BEDROCK_MODEL_ID",
-    "us.anthropic.claude-3-7-sonnet-20250219-v1:0",
-)
-
-# --- Import the KB tool exposed in course_catalog_kb_tool.py ---
-# Expecting a @tool named `course_kb_search(query: str, top_k: int = 5) -> str`
 try:
-    from course_catalog_kb_tool import course_kb_search  # noqa: F401
-except Exception as e:
-    # Provide a clear error at runtime if the tool isn't available
-    raise RuntimeError(
-        "Failed to import course_kb_search from course_catalog_kb_tool.py. "
-        "Make sure that file defines a @tool named course_kb_search(query: str, top_k: int = 5) -> str. "
-        f"Import error: {e}"
-    )
+    from agentcore import Agent  # type: ignore
+except Exception:
+    class Agent:
+        def __init__(self, name: str, system: str, tools=None):
+            self.name, self.system, self.tools = name, system, tools or []
+        def __call__(self, prompt: str) -> str:
+            return f"[Shim Agent: no LLM connected]\nSYSTEM:\n{self.system}\n\nPROMPT:\n{prompt}"
 
-# --- Optional: Code Interpreter tool (handy for dev/testing) ---
-ci_sessions = {}
-current_session = None
+from course_catalog_kb_tool import course_kb_search
+from console_agent_tool import invoke_console_agent
 
-@tool
-def calculate(code: str) -> str:
-    """Execute short Python snippets. Use ONLY for math or tiny data checks."""
-    session_id = current_session or "default"
+# ------------- SYSTEM PROMPT (STRICT) -------------
+system_prompt = """
+You are NexAI — a router/orchestrator.
+Follow these MUST rules:
 
-    if session_id not in ci_sessions:
-        ci_sessions[session_id] = {
-            "client": CodeInterpreter(REGION),
-            "session_id": None,
-        }
+1) If the user asks about COURSES (UTD course names/descriptions, prerequisites, which course to take, learning path),
+   CALL the tool `invoke_console_agent` FIRST with the user’s text as-is.
+   - Do not answer from your own knowledge.
+   - Return exactly what the console agent responded (you may lightly tidy formatting).
 
-    ci = ci_sessions[session_id]
-    if not ci["session_id"]:
-        ci["session_id"] = ci["client"].start(
-            name=f"session_{session_id[:30]}",
-            session_timeout_seconds=1800,
-        )
+2) If the user asks ONLY about JOBS/ROLES/SKILLS/SALARIES/MARKET TRENDS,
+   CALL the tool `course_kb_search` FIRST with a domain hint “jobs-only; exclude course catalog; summarize & cite”.
+   - Base your final answer ONLY on the KB snippets returned.
 
-    result = ci["client"].invoke(
-        "executeCode",
-        {"code": code, "language": "python"},
-    )
+3) If both courses and jobs are requested, FIRST call `course_kb_search` to collect job-side signals,
+   THEN call `invoke_console_agent` and include a brief bridge that maps skills → courses.
 
-    for event in result.get("stream", []):
-        stdout = (
-            event.get("result", {})
-            .get("structuredContent", {})
-            .get("stdout")
-        )
-        if stdout:
-            return stdout
-    return "Executed"
+4) If a required tool returns NO_RESULTS or ERROR, say:
+   “I didn’t find enough in the KB/agent for that. Please refine your query.”
+   Do not fabricate.
 
-# --- Agent entrypoint ---
-@app.entrypoint
-def invoke(payload, context):
-    """
-    Expected payload: {"prompt": "<user text>"}.
-    The agent has two tools:
-      1) course_kb_search -> queries the UTD course catalog Knowledge Base.
-      2) calculate        -> basic math/code (dev convenience).
-    """
-    global current_session
+Keep responses concise and structured.
+"""
 
-    if not MEMORY_ID:
-        return {"error": "Memory not configured (BEDROCK_AGENTCORE_MEMORY_ID missing)."}
+def _domain(p: str):
+    t = p.lower()
+    jobs = any(k in t for k in ["job","role","skills","salary","market","posting","requirements","trend","usa","united states"])
+    courses = any(k in t for k in ["course","utd","subject","credit","prereq","syllabus","catalog","which courses","learning path","buan","mis ","cs "])
+    return jobs, courses
 
-    # Resolve session/actor (AgentCore provides these headers/fields)
-    actor_id = (
-        context.headers.get("X-Amzn-Bedrock-AgentCore-Runtime-Custom-Actor-Id", "user")
-        if hasattr(context, "headers")
-        else "user"
-    )
-    session_id = getattr(context, "session_id", "default")
-    current_session = session_id
+agent = Agent(
+    name="NexAI",
+    system=system_prompt,
+    tools=[invoke_console_agent, course_kb_search],
+)
 
-    # Configure AgentCore memory retrieval
-    memory_config = AgentCoreMemoryConfig(
-        memory_id=MEMORY_ID,
-        session_id=session_id,
-        actor_id=actor_id,
-        retrieval_config={
-            f"/users/{actor_id}/facts": RetrievalConfig(top_k=3, relevance_score=0.5),
-            f"/users/{actor_id}/preferences": RetrievalConfig(top_k=3, relevance_score=0.5),
-        },
-    )
+def run(payload: Dict) -> str:
+    raw = payload.get("prompt", "")
+    jobs, courses = _domain(raw)
 
-    # Clear routing guidance so the model uses the right tool automatically
-    system_prompt = (
-        "You are a helpful assistant.\n"
-        "\n"
-        "Routing rules:\n"
-        "1) For ANY question about UTD courses, course descriptions, prerequisites, skills taught, "
-        "   scheduling/sections, or \"which course should I take\", FIRST call the tool "
-        "`course_kb_search` with a well-phrased query. Then synthesize an answer using the retrieved "
-        "passages and include brief source URIs.\n"
-        "2) Use `calculate` ONLY for pure numeric/math requests or tiny Python calculations. "
-        "   If a user asks about courses but includes numbers, STILL call `course_kb_search` first.\n"
-        "3) If the KB returns no results, say so briefly and ask a focused follow-up question."
-    )
+    # A tiny nudge to the planner
+    if courses and not jobs:
+        hint = "Planner: Use invoke_console_agent FIRST."
+    elif jobs and not courses:
+        hint = "Planner: Use course_kb_search FIRST with [jobs-only; exclude course catalog]."
+    else:
+        hint = "Planner: Do course_kb_search FIRST, then invoke_console_agent."
 
-    agent = Agent(
-        model=MODEL_ID,
-        session_manager=AgentCoreMemorySessionManager(memory_config, REGION),
-        system_prompt=system_prompt,
-        # Put the KB tool first to bias selection toward it
-        tools=[course_kb_search, calculate],
-    )
-
-    user_prompt = payload.get("prompt", "")
-    result = agent(user_prompt)
-
-    # Safely extract text
-    text = result.message.get("content", [{}])[0].get("text")
-    return {"response": text or str(result)}
+    print(f"[DEBUG] Using AgentID=DYOPALGMYF, AliasID=Y5ERQMDBRX, KB=2BA9XEXYD4, Region=us-east-1")
+    
+    response = agent(f"{hint}\n\nUser: {raw}")
+    if os.getenv("PRINT_AGENT_RESPONSE", "1") == "1":
+        print(response)
+    return response
 
 if __name__ == "__main__":
-    app.run()
+    if len(sys.argv) >= 3 and sys.argv[1] == "invoke":
+        payload = json.loads(sys.argv[2])
+        run(payload)
+    else:
+        print("Usage: python agentcore_starter_strands.py invoke '{\"prompt\":\"...\"}'")
 
 
+# #!/usr/bin/env python3
+# # -*- coding: utf-8 -*-
 
 # """
-# Strands Agent sample with AgentCore
+# AgentCore starter with strict domain routing and MUST-use-KB grounding.
+
+# Usage (standalone):
+#   python agentcore_starter_strands.py invoke '{"prompt":"List the top 5 job skills for Data Scientist roles in the USA"}'
+
+# In your existing harness (e.g., `agentcore invoke ...`), it’s enough that this file exposes
+# the `agent` object and the `run(payload: dict) -> str` helper. Adjust imports if your AgentCore
+# package path differs.
 # """
+
+# import json
 # import os
-# from strands import Agent, tool
-# from bedrock_agentcore.memory.integrations.strands.config import AgentCoreMemoryConfig, RetrievalConfig
-# from bedrock_agentcore.memory.integrations.strands.session_manager import AgentCoreMemorySessionManager
-# from bedrock_agentcore.tools.code_interpreter_client import CodeInterpreter
-# from bedrock_agentcore.runtime import BedrockAgentCoreApp
+# import sys
+# from typing import Dict
 
-# app = BedrockAgentCoreApp()
+# # --- AgentCore imports (fallback-friendly) ---
+# try:
+#     from agentcore import Agent  # type: ignore
+# except Exception:
+#     # Minimal shim for local testing if AgentCore isn't present
+#     class Agent:
+#         def __init__(self, name: str, system: str, tools=None):
+#             self.name = name
+#             self.system = system
+#             self.tools = tools or []
 
-# MEMORY_ID = os.getenv("BEDROCK_AGENTCORE_MEMORY_ID")
-# REGION = os.getenv("AWS_REGION")
-# MODEL_ID = "us.anthropic.claude-3-7-sonnet-20250219-v1:0"
+#         def __call__(self, prompt: str) -> str:
+#             # This shim only echoes; real behavior requires AgentCore.
+#             return f"[Shim Agent: no LLM connected]\nSYSTEM:\n{self.system}\n\nPROMPT:\n{prompt}"
 
-# ci_sessions = {}
-# current_session = None
+# # Import the KB tool (kept as a separate module)
+# from course_catalog_kb_tool import course_kb_search
 
-# @tool
-# def calculate(code: str) -> str:
-#     """Execute Python code for calculations or analysis."""
-#     session_id = current_session or 'default'
+# # -------------------------
+# # SYSTEM PROMPT (STRICT)
+# # -------------------------
+# system_prompt = ("""
+# "You are a helpful assistant.\n"
+#         "\n"
+#         "Routing rules:\n"
+#         "1) For ANY question about UTD courses, course descriptions, prerequisites, skills taught, "
+#         "   scheduling/sections, or \"which course should I take\", FIRST call the tool "
+#         "`course_kb_search` with a well-phrased query. Then synthesize an answer using the retrieved "
+#         "passages and include brief source URIs.\n"
+#         "2) Use `calculate` ONLY for pure numeric/math requests or tiny Python calculations. "
+#         "   If a user asks about courses but includes numbers, STILL call `course_kb_search` first.\n"
+#         "3) If the KB returns no results, say so briefly and ask a focused follow-up question."
+# """)
 
-#     if session_id not in ci_sessions:
-#         ci_sessions[session_id] = {
-#             'client': CodeInterpreter(REGION),
-#             'session_id': None
-#         }
+# # -------------------------
+# # Helper: domain hinting
+# # -------------------------
+# def _domain_hint(p: str) -> str:
+#     text = p.lower()
+#     jobs_triggers = [
+#         "job", "role", "skills", "salary", "market", "employer",
+#         "posting", "usa", "united states", "requirements", "trend"
+#     ]
+#     courses_triggers = [
+#         "course", "utd", "subject", "credit", "prereq", "syllabus",
+#         "catalog", "cs ", "buan", "mis ", "which courses", "learning path"
+#     ]
 
-#     ci = ci_sessions[session_id]
-#     if not ci['session_id']:
-#         ci['session_id'] = ci['client'].start(
-#             name=f"session_{session_id[:30]}",
-#             session_timeout_seconds=1800
-#         )
+#     jobs = any(t in text for t in jobs_triggers)
+#     courses = any(t in text for t in courses_triggers)
 
-#     result = ci['client'].invoke("executeCode", {
-#         "code": code,
-#         "language": "python"
-#     })
+#     if jobs and not courses:
+#         return f"{p}\n\n[retrieval-hint: jobs-only; exclude course catalog; summarize by frequency; cite KB sources]"
+#     if courses and not jobs:
+#         return f"{p}\n\n[retrieval-hint: courses-only; exclude job postings; list course codes + one-line summaries; cite KB sources]"
+#     return f"{p}\n\n[retrieval-hint: bridge allowed if needed; first retrieve jobs → then map to UTD courses; cite KB sources]"
 
-#     for event in result.get("stream", []):
-#         if stdout := event.get("result", {}).get("structuredContent", {}).get("stdout"):
-#             return stdout
-#     return "Executed"
+# # -------------------------
+# # Build Agent
+# # -------------------------
+# agent = Agent(
+#     name="",
+#     system=system_prompt,
+#     tools=[course_kb_search],
+# )
 
-# @app.entrypoint
-# def invoke(payload, context):
-#     global current_session
+# # -------------------------
+# # Public entrypoint
+# # -------------------------
+# def run(payload: Dict) -> str:
+#     raw = payload.get("prompt", "")
+#     user_prompt = _domain_hint(raw)
 
-#     if not MEMORY_ID:
-#         return {"error": "Memory not configured"}
-
-#     actor_id = context.headers.get('X-Amzn-Bedrock-AgentCore-Runtime-Custom-Actor-Id', 'user') if hasattr(context, 'headers') else 'user'
-
-#     session_id = getattr(context, 'session_id', 'default')
-#     current_session = session_id
-
-#     memory_config = AgentCoreMemoryConfig(
-#         memory_id=MEMORY_ID,
-#         session_id=session_id,
-#         actor_id=actor_id,
-#         retrieval_config={
-#             f"/users/{actor_id}/facts": RetrievalConfig(top_k=3, relevance_score=0.5),
-#             f"/users/{actor_id}/preferences": RetrievalConfig(top_k=3, relevance_score=0.5)
-#         }
+#     # Short, per-turn tool-use gate to reinforce MUST-use behavior
+#     tool_gate = (
+#         "Reminder: For this query, call `course_kb_search` FIRST using the retrieval-hint. "
+#         "Base your final answer ONLY on retrieved KB snippets. "
+#         "Do NOT include courses in jobs-only queries, and do NOT include job stats in courses-only queries."
 #     )
 
-#     agent = Agent(
-#         model=MODEL_ID,
-#         session_manager=AgentCoreMemorySessionManager(memory_config, REGION),
-#         system_prompt="You are a helpful assistant. Use tools when appropriate.",
-#         tools=[calculate]
-#     )
+#     response = agent(f"{tool_gate}\n\n{user_prompt}")
+#     # If your harness expects a print, keep this:
+#     if os.getenv("PRINT_AGENT_RESPONSE", "1") == "1":
+#         print(response)
+#     return response
 
-#     result = agent(payload.get("prompt", ""))
-#     return {"response": result.message.get('content', [{}])[0].get('text', str(result))}
-
+# # CLI compatibility (optional for your harness)
 # if __name__ == "__main__":
-#     app.run()
+#     if len(sys.argv) >= 3 and sys.argv[1] == "invoke":
+#         try:
+#             payload = json.loads(sys.argv[2])
+#         except Exception:
+#             print("ERROR: Provide JSON payload as the second argument.", file=sys.stderr)
+#             sys.exit(2)
+#         run(payload)
+#     else:
+#         print("Usage: python agentcore_starter_strands.py invoke '{\"prompt\":\"...\"}'")

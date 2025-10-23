@@ -1,80 +1,76 @@
-# course_catalog_kb_tool.py
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+
+"""
+Tool: course_kb_search(query, top_k=5)
+"""
+
+import json
+import os
+import textwrap
 from typing import List, Dict, Any
-import os, boto3
-from strands import tool  # <-- add
+import boto3
 
-_REGION = os.getenv("AWS_REGION", "us-east-1")
-_KB_ID = os.getenv("COURSE_KB_ID")
-_runtime = boto3.client("bedrock-agent-runtime", region_name=_REGION)
+try:
+    from agentcore import tool  # type: ignore
+except Exception:
+    def tool(fn):
+        return fn
 
-def kb_retrieve(query: str, top_k: int = 5) -> Dict[str, Any]:
-    if not _KB_ID:
-        raise RuntimeError("COURSE_KB_ID env var is not set.")
-    
-    if not isinstance(top_k, int) or top_k <= 0:
-        top_k = 5
 
-    resp = _runtime.retrieve(
-        knowledgeBaseId=_KB_ID,
-        retrievalQuery={"text": query.strip()},
-        retrievalConfiguration={"vectorSearchConfiguration": {"numberOfResults": top_k}},
+def _bedrock_kb_client(region: str):
+    return boto3.client("bedrock-agent-runtime", region_name=region)
+
+
+def _fmt_chunk(i: int, ch: Dict[str, Any]) -> str:
+    text = (
+        ch.get("content", {}).get("text")
+        or ch.get("text")
+        or ch.get("content")
+        or ""
     )
+    text = " ".join(str(text).split())
+    text = textwrap.shorten(text, width=900, placeholder=" …")
+    loc = ch.get("location", {}) or {}
+    s3_uri = loc.get("s3Location", {}).get("uri")
+    url = loc.get("url")
+    loc_type = loc.get("type")
+    source = s3_uri or url or (f"source:{loc_type}" if loc_type else "source:unknown")
+    return f"[{i}] {text}\n    — {source}"
 
-    chunks = []
-    for item in resp.get("retrievalResults", []):
-        text = item.get("content", {}).get("text", "")
-        score = item.get("score")
-        # source = None
-        loc = (item.get("location") or {}).get("s3Location") or {}
-        source = loc.get("uri")  # e.g., s3://bucket/prefix/file#offsets
-        chunks.append({"text": text, "score": score, "source": source})
-    return {"query": query, "results": chunks}
 
 @tool
 def course_kb_search(query: str, top_k: int = 5) -> str:
-    """Search the UTD Course Catalog KB and return the top passages with sources."""
-    data = kb_retrieve(query, top_k)
-    rows = []
-    for r in data["results"]:
-        score = f"{r['score']:.2f}" if isinstance(r["score"], (int, float)) else str(r["score"])
-        rows.append(f"- {r['text']}\n  Source: {r['source']}  (score: {score})")
-    return "\n".join(rows) if rows else "No results."
+    region = os.getenv("AWS_REGION", "us-east-1")
+    kb_id = os.getenv("COURSE_KB_ID") or "2BA9XEXYD4"   # hard-fallback KB ID
 
+    if not kb_id:
+        return "ERROR: COURSE_KB_ID not set and no hard-fallback provided."
 
+    client = _bedrock_kb_client(region)
 
-# # course_catalog_kb_tool.py
-# from typing import List, Dict, Any
-# import os
-# import boto3
+    try:
+        resp = client.retrieve(
+            knowledgeBaseId=kb_id,
+            retrievalQuery={"text": query},
+            retrievalConfiguration={
+                "vectorSearchConfiguration": {"numberOfResults": int(top_k)}
+            },
+        )
+    except Exception as e:
+        return f"ERROR: Bedrock KB retrieve() failed: {e}"
 
-# # Read once at import
-# _REGION = os.getenv("AWS_REGION", "us-east-1")
-# _KB_ID = os.getenv("COURSE_KB_ID")  # we’ll set this in the YAML below
-# _runtime = boto3.client("bedrock-agent-runtime", region_name=_REGION)
+    results: List[Dict[str, Any]] = (
+        resp.get("retrievalResults")
+        or resp.get("results")
+        or resp.get("response", {}).get("retrievalResults")
+        or []
+    )
 
-# def kb_retrieve(query: str, top_k: int = 5) -> Dict[str, Any]:
-#     """
-#     Retrieve top_k passages from your Bedrock Knowledge Base.
-#     Returns passages + metadata that your agent can reason over.
-#     """
-#     if not _KB_ID:
-#         raise RuntimeError("COURSE_KB_ID env var is not set. Add it in .bedrock_agentcore.yaml env.")
+    if not results:
+        return "NO_RESULTS: The KB returned no matches for this query."
 
-#     resp = _runtime.retrieve(
-#         knowledgeBaseId=_KB_ID,
-#         retrievalQuery={"text": query},
-#         retrievalConfiguration={
-#             "vectorSearchConfiguration": {"numberOfResults": top_k}
-#         },
-#     )
-
-#     chunks = []
-#     for item in resp.get("retrievalResults", []):
-#         text = item.get("content", {}).get("text", "")
-#         score = item.get("score")
-#         source = None
-#         for ref in item.get("location", {}).get("s3Location", []):
-#             source = ref.get("uri")
-#         chunks.append({"text": text, "score": score, "source": source})
-
-#     return {"query": query, "results": chunks}
+    lines = ["KB_RESULTS:"]
+    for i, r in enumerate(results[:top_k], start=1):
+        lines.append(_fmt_chunk(i, r))
+    return "\n".join(lines)
