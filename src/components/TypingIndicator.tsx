@@ -6,12 +6,18 @@ import { FaUserTie } from 'react-icons/fa'
 const TypingIndicator: React.FC = () => {
   return (
     <div className="typing-indicator">
-      <FaUserTie />
-      <span>NexAI is thinking</span>
-      <div className="typing-dots">
-        <div className="typing-dot"></div>
-        <div className="typing-dot"></div>
-        <div className="typing-dot"></div>
+      <div className="typing-avatar">
+        <FaUserTie />
+      </div>
+      <div className="typing-content">
+        <div className="typing-bubble">
+          <span>NexAI is thinking</span>
+          <div className="typing-dots">
+            <div className="typing-dot"></div>
+            <div className="typing-dot"></div>
+            <div className="typing-dot"></div>
+          </div>
+        </div>
       </div>
     </div>
   )

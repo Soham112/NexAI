@@ -3,11 +3,7 @@
 import React from 'react'
 import { FaGraduationCap, FaBriefcase, FaBook, FaProjectDiagram, FaLightbulb } from 'react-icons/fa'
 
-interface WelcomeSectionProps {
-  onStartChat: () => void
-}
-
-const WelcomeSection: React.FC<WelcomeSectionProps> = ({ onStartChat }) => {
+const WelcomeSection: React.FC = () => {
   const actionButtons = [
     {
       icon: FaGraduationCap,
@@ -49,7 +45,6 @@ const WelcomeSection: React.FC<WelcomeSectionProps> = ({ onStartChat }) => {
             <button
               key={index}
               className="action-btn"
-              onClick={() => onStartChat()}
             >
               <IconComponent />
               {button.text}
