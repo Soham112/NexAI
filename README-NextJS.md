@@ -1,10 +1,6 @@
-# NexAI - Intelligent Assistant
+# NexAI Next.js Application
 
-A modern Next.js application with AI-powered chat interface, designed to integrate with AWS Bedrock agents and S3 bucket data for intelligent course catalog and job market assistance.
-
-![NextAI Interface](https://img.shields.io/badge/Next.js-14.0.4-black?style=for-the-badge&logo=next.js)
-![TypeScript](https://img.shields.io/badge/TypeScript-5.3.3-blue?style=for-the-badge&logo=typescript)
-![AWS](https://img.shields.io/badge/AWS-Bedrock%20%7C%20S3-orange?style=for-the-badge&logo=amazon-aws)
+A modern, responsive Next.js application converted from the original HTML file, designed to integrate with AWS Bedrock agents and S3 bucket data for intelligent course catalog and job market assistance.
 
 ## 🚀 Features
 
@@ -16,40 +12,62 @@ A modern Next.js application with AI-powered chat interface, designed to integra
 - **Responsive Design**: Works perfectly on desktop, tablet, and mobile devices
 - **TypeScript Support**: Full type safety and better development experience
 
-## 📋 Prerequisites
+## 📁 Project Structure
 
-Before you begin, ensure you have the following installed:
-
-- **Node.js** 18.0 or higher ([Download](https://nodejs.org/))
-- **npm** or **yarn** package manager
-- **AWS Account** with Bedrock and S3 access
-- **Python** 3.8+ (for existing scripts integration)
+```
+NexAI/
+├── src/
+│   ├── app/                    # Next.js app directory
+│   │   ├── api/               # API routes
+│   │   │   ├── chat/         # Chat API endpoint
+│   │   │   ├── courses/      # Course data API
+│   │   │   ├── jobs/        # Job data API
+│   │   │   ├── scripts/     # Script execution API
+│   │   │   ├── data/       # Local data access API
+│   │   │   └── upload/    # S3 upload API
+│   │   ├── globals.css     # Global styles
+│   │   ├── layout.tsx     # Root layout
+│   │   └── page.tsx      # Home page
+│   ├── components/         # React components
+│   │   ├── ChatContext.tsx
+│   │   ├── ChatInterface.tsx
+│   │   ├── ChatMessages.tsx
+│   │   ├── Layout.tsx
+│   │   ├── Sidebar.tsx
+│   │   ├── TopNavigation.tsx
+│   │   ├── TypingIndicator.tsx
+│   │   └── WelcomeSection.tsx
+│   ├── lib/              # Utility libraries
+│   │   ├── bedrock.ts   # AWS Bedrock client
+│   │   ├── s3.ts       # S3 client and data access
+│   │   └── mockResponses.ts
+│   └── types/           # TypeScript type definitions
+│       └── index.ts
+├── Code/               # Existing Python scripts
+├── package.json
+├── next.config.js
+├── tsconfig.json
+└── README-NextJS.md
+```
 
 ## 🛠️ Installation & Setup
 
-### 1. Clone the Repository
+### Prerequisites
 
-```bash
-git clone <your-repository-url>
-cd NexAI
-git checkout rishabh
-```
+- Node.js 18+ 
+- npm or yarn
+- AWS Account with Bedrock and S3 access
+- Python 3.8+ (for existing scripts)
 
-### 2. Install Dependencies
+### 1. Install Dependencies
 
 ```bash
 npm install
 ```
 
-### 3. Environment Configuration
+### 2. Environment Configuration
 
 Create a `.env.local` file in the root directory:
-
-```bash
-cp env.example .env.local
-```
-
-Fill in your environment variables:
 
 ```env
 # AWS Configuration
@@ -68,12 +86,11 @@ NEXT_PUBLIC_APP_NAME=NextAI
 NEXT_PUBLIC_APP_VERSION=1.0.0
 ```
 
-### 4. AWS Setup
+### 3. AWS Setup
 
-#### Enable Bedrock Access
-1. Go to [AWS Bedrock Console](https://console.aws.amazon.com/bedrock/)
-2. Enable Claude models in your region
-3. Ensure your AWS credentials have `bedrock:InvokeModel` permissions
+#### Bedrock Access
+1. Enable Claude models in AWS Bedrock console
+2. Ensure your AWS credentials have `bedrock:InvokeModel` permissions
 
 #### S3 Setup
 1. Create an S3 bucket for data storage
@@ -92,15 +109,13 @@ NEXT_PUBLIC_APP_VERSION=1.0.0
    │           └── trends.jsonl
    ```
 
-### 5. Run the Application
+### 4. Run the Application
 
-#### Development Mode
 ```bash
+# Development mode
 npm run dev
-```
 
-#### Production Build
-```bash
+# Production build
 npm run build
 npm start
 ```
@@ -114,8 +129,8 @@ The application will be available at `http://localhost:3000`
 - **Body**: `{ message: string, conversationId?: string, settings?: object }`
 
 ### Data APIs
-- **GET** `/api/courses` - Fetch course catalog data from S3
-- **GET** `/api/jobs` - Fetch job market data from S3
+- **GET** `/api/courses` - Fetch course catalog data
+- **GET** `/api/jobs` - Fetch job market data
 - **GET** `/api/data?type=catalog|coursebook|trends|all` - Fetch local data files
 
 ### Script Integration APIs
@@ -153,42 +168,17 @@ const response = await fetch('/api/scripts', {
 })
 ```
 
-## 📁 Project Structure
-
-```
-NexAI/
-├── src/
-│   ├── app/                    # Next.js app directory
-│   │   ├── api/               # API routes
-│   │   │   ├── chat/         # Chat API endpoint
-│   │   │   ├── courses/      # Course data API
-│   │   │   ├── jobs/        # Job data API
-│   │   │   ├── scripts/     # Script execution API
-│   │   │   ├── data/       # Local data access API
-│   │   │   └── upload/    # S3 upload API
-│   │   ├── globals.css     # Global styles
-│   │   ├── layout.tsx     # Root layout
-│   │   └── page.tsx      # Home page
-│   ├── components/         # React components
-│   │   ├── ChatContext.tsx
-│   │   ├── ChatInterface.tsx
-│   │   ├── ChatMessages.tsx
-│   │   ├── Layout.tsx
-│   │   ├── Sidebar.tsx
-│   │   ├── TopNavigation.tsx
-│   │   ├── TypingIndicator.tsx
-│   │   └── WelcomeSection.tsx
-│   ├── lib/              # Utility libraries
-│   │   ├── bedrock.ts   # AWS Bedrock client
-│   │   ├── s3.ts       # S3 client and data access
-│   │   └── mockResponses.ts
-│   └── types/           # TypeScript type definitions
-│       └── index.ts
-├── Code/               # Existing Python scripts
-├── package.json
-├── next.config.js
-├── tsconfig.json
-└── README.md
+### UTD Trends Scraper
+```typescript
+// Execute trends scraping script
+const response = await fetch('/api/scripts', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    scriptType: 'utd-trends',
+    parameters: ['--date', '2024-01-01']
+  })
+})
 ```
 
 ## 🎨 Customization
@@ -224,34 +214,14 @@ All components are modular and can be easily customized:
 
 ### Docker
 ```dockerfile
-FROM node:18-alpine AS base
-
-FROM base AS deps
-RUN apk add --no-cache libc6-compat
+FROM node:18-alpine
 WORKDIR /app
-COPY package.json package-lock.json* ./
-RUN npm ci
-
-FROM base AS builder
-WORKDIR /app
-COPY --from=deps /app/node_modules ./node_modules
+COPY package*.json ./
+RUN npm ci --only=production
 COPY . .
 RUN npm run build
-
-FROM base AS runner
-WORKDIR /app
-ENV NODE_ENV production
-RUN addgroup --system --gid 1001 nodejs
-RUN adduser --system --uid 1001 nextjs
-COPY --from=builder /app/public ./public
-RUN mkdir .next
-RUN chown nextjs:nodejs .next
-COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
-COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
-USER nextjs
 EXPOSE 3000
-ENV PORT 3000
-CMD ["node", "server.js"]
+CMD ["npm", "start"]
 ```
 
 ## 🔍 Troubleshooting
@@ -291,14 +261,14 @@ DEBUG=true
 ## 🤝 Contributing
 
 1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add some amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
+2. Create a feature branch
+3. Make your changes
+4. Add tests if applicable
+5. Submit a pull request
 
 ## 📄 License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+This project is licensed under the MIT License.
 
 ## 🆘 Support
 
@@ -307,14 +277,6 @@ For support and questions:
 - Check the troubleshooting section
 - Review AWS documentation for Bedrock and S3
 
-## 🙏 Acknowledgments
-
-- Inspired by Google's Gemini interface design
-- Built with Next.js and React
-- Powered by AWS Bedrock and Claude AI models
-
 ---
 
 **NextAI** - Your intelligent assistant for courses, jobs, and learning resources.
-
-Made with ❤️ using Next.js, TypeScript, and AWS services.

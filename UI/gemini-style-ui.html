@@ -1,0 +1,955 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NextAI - Intelligent Assistant</title>
+    <link href="https://fonts.googleapis.com/css2?family=Google+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        /* Reset and Base Styles */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Google Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: #f8f9fa;
+            color: #202124;
+            line-height: 1.5;
+            overflow-x: hidden;
+        }
+
+        /* Top Navigation Bar */
+        .top-nav {
+            background: white;
+            border-bottom: 1px solid #e8eaed;
+            padding: 8px 16px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 1000;
+            height: 56px;
+        }
+
+        .nav-left {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .hamburger-menu {
+            background: none;
+            border: none;
+            padding: 8px;
+            cursor: pointer;
+            border-radius: 50%;
+            transition: background-color 0.2s;
+        }
+
+        .hamburger-menu:hover {
+            background-color: #f1f3f4;
+        }
+
+        .hamburger-menu i {
+            font-size: 20px;
+            color: #5f6368;
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .logo h1 {
+            font-size: 22px;
+            font-weight: 400;
+            color: #202124;
+        }
+
+        .nav-right {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .upgrade-btn {
+            background: #1a73e8;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            transition: background-color 0.2s;
+        }
+
+        .upgrade-btn:hover {
+            background: #1557b0;
+        }
+
+        .user-avatar {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background: #1a73e8;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 500;
+            cursor: pointer;
+        }
+
+        /* Main Layout */
+        .main-container {
+            display: flex;
+            margin-top: 56px;
+            min-height: calc(100vh - 56px);
+        }
+
+        /* Left Sidebar */
+        .sidebar {
+            width: 64px;
+            background: #f8f9fa;
+            border-right: 1px solid #e8eaed;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 16px 0;
+            position: fixed;
+            left: 0;
+            top: 56px;
+            bottom: 0;
+        }
+
+        .sidebar-item {
+            width: 48px;
+            height: 48px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+            cursor: pointer;
+            margin-bottom: 8px;
+            transition: background-color 0.2s;
+        }
+
+        .sidebar-item:hover {
+            background-color: #e8eaed;
+        }
+
+        .sidebar-item i {
+            font-size: 20px;
+            color: #5f6368;
+        }
+
+        .sidebar-item.active i {
+            color: #1a73e8;
+        }
+
+        /* Main Content */
+        .main-content {
+            flex: 1;
+            margin-left: 64px;
+            padding: 40px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: calc(100vh - 56px);
+        }
+
+        /* Welcome Section */
+        .welcome-section {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+
+        .welcome-title {
+            font-size: 48px;
+            font-weight: 400;
+            color: #202124;
+            margin-bottom: 16px;
+        }
+
+        /* Input Section */
+        .input-section {
+            width: 100%;
+            max-width: 600px;
+            position: relative;
+        }
+
+        .input-container {
+            position: relative;
+            background: white;
+            border: 1px solid #e8eaed;
+            border-radius: 24px;
+            padding: 12px 16px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            transition: box-shadow 0.2s;
+        }
+
+        .input-container:focus-within {
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+        }
+
+        .input-field {
+            flex: 1;
+            border: none;
+            outline: none;
+            font-size: 16px;
+            color: #202124;
+            background: transparent;
+        }
+
+        .input-field::placeholder {
+            color: #9aa0a6;
+        }
+
+        .input-actions {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .input-action-btn {
+            background: none;
+            border: none;
+            padding: 8px;
+            border-radius: 50%;
+            cursor: pointer;
+            color: #5f6368;
+            transition: background-color 0.2s;
+        }
+
+        .input-action-btn:hover {
+            background-color: #f1f3f4;
+        }
+
+        .input-action-btn i {
+            font-size: 20px;
+        }
+
+        .tools-btn {
+            background: #f1f3f4;
+            border: none;
+            padding: 8px 12px;
+            border-radius: 16px;
+            cursor: pointer;
+            color: #5f6368;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            transition: background-color 0.2s;
+        }
+
+        .tools-btn:hover {
+            background-color: #e8eaed;
+        }
+
+        .send-btn {
+            background: #1a73e8;
+            border: none;
+            padding: 8px;
+            border-radius: 50%;
+            cursor: pointer;
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background-color 0.2s;
+        }
+
+        .send-btn:hover {
+            background: #1557b0;
+        }
+
+        .send-btn:disabled {
+            background: #9aa0a6;
+            cursor: not-allowed;
+        }
+
+        .send-btn i {
+            font-size: 16px;
+        }
+
+        /* Action Buttons */
+        .action-buttons {
+            display: flex;
+            gap: 12px;
+            margin-top: 24px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        .action-btn {
+            background: white;
+            border: 1px solid #e8eaed;
+            padding: 12px 16px;
+            border-radius: 20px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 14px;
+            color: #202124;
+            transition: all 0.2s;
+            text-decoration: none;
+        }
+
+        .action-btn:hover {
+            background: #f8f9fa;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        }
+
+        .action-btn i {
+            font-size: 16px;
+            color: #5f6368;
+        }
+
+        /* Tooltip */
+        .tooltip {
+            position: absolute;
+            top: -40px;
+            right: 0;
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 8px 12px;
+            border-radius: 4px;
+            font-size: 12px;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.2s;
+        }
+
+        .input-container:hover .tooltip {
+            opacity: 1;
+        }
+
+        /* Responsive Design */
+        @media (max-width: 768px) {
+            .main-content {
+                padding: 20px;
+            }
+
+            .welcome-title {
+                font-size: 36px;
+            }
+
+            .action-buttons {
+                flex-direction: column;
+                align-items: center;
+            }
+
+            .action-btn {
+                width: 100%;
+                max-width: 300px;
+                justify-content: center;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .welcome-title {
+                font-size: 28px;
+            }
+
+            .input-container {
+                padding: 8px 12px;
+            }
+
+            .action-buttons {
+                gap: 8px;
+            }
+        }
+
+        /* Chat Messages (Hidden by default) */
+        .chat-messages {
+            display: none;
+            width: 100%;
+            max-width: 800px;
+            margin-top: 20px;
+        }
+
+        .message {
+            margin-bottom: 20px;
+            display: flex;
+            gap: 12px;
+        }
+
+        .message.user {
+            flex-direction: row-reverse;
+        }
+
+        .message-avatar {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            flex-shrink: 0;
+        }
+
+        .message.user .message-avatar {
+            background: #1a73e8;
+            color: white;
+        }
+
+        .message.nextai .message-avatar {
+            background: #f1f3f4;
+            color: #5f6368;
+        }
+
+        .message-content {
+            flex: 1;
+            max-width: 70%;
+        }
+
+        .message.user .message-content {
+            text-align: right;
+        }
+
+        .message-bubble {
+            background: white;
+            border: 1px solid #e8eaed;
+            border-radius: 18px;
+            padding: 12px 16px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            word-wrap: break-word;
+        }
+
+        .message.user .message-bubble {
+            background: #1a73e8;
+            color: white;
+            border-color: #1a73e8;
+        }
+
+        .message.nextai .message-bubble {
+            border-bottom-left-radius: 4px;
+        }
+
+        .message.user .message-bubble {
+            border-bottom-right-radius: 4px;
+        }
+
+        .message-text {
+            line-height: 1.5;
+            white-space: pre-wrap;
+        }
+
+        .message-time {
+            font-size: 12px;
+            color: #9aa0a6;
+            margin-top: 4px;
+        }
+
+        .message.user .message-time {
+            color: rgba(255, 255, 255, 0.8);
+        }
+
+        /* Loading States */
+        .typing-indicator {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: #5f6368;
+            font-style: italic;
+            padding: 12px 16px;
+            background: #f8f9fa;
+            border-radius: 18px;
+            border-bottom-left-radius: 4px;
+            margin-bottom: 20px;
+            max-width: 70%;
+        }
+
+        .typing-dots {
+            display: flex;
+            gap: 3px;
+        }
+
+        .typing-dot {
+            width: 6px;
+            height: 6px;
+            background: #5f6368;
+            border-radius: 50%;
+            animation: typing 1.4s infinite ease-in-out;
+        }
+
+        .typing-dot:nth-child(1) { animation-delay: -0.32s; }
+        .typing-dot:nth-child(2) { animation-delay: -0.16s; }
+
+        @keyframes typing {
+            0%, 80%, 100% {
+                transform: scale(0.8);
+                opacity: 0.5;
+            }
+            40% {
+                transform: scale(1);
+                opacity: 1;
+            }
+        }
+
+        /* Error States */
+        .error-message {
+            background: #fce8e6;
+            border: 1px solid #f28b82;
+            color: #d93025;
+            padding: 12px 16px;
+            border-radius: 8px;
+            margin: 20px 0;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+    </style>
+</head>
+<body>
+    <!-- Top Navigation Bar -->
+    <nav class="top-nav">
+        <div class="nav-left">
+            <button class="hamburger-menu">
+                <i class="fas fa-bars"></i>
+            </button>
+            <div class="logo">
+                <h1>NextAI</h1>
+            </div>
+        </div>
+        <div class="nav-right">
+            <button class="upgrade-btn">
+                <i class="fas fa-gem"></i>
+                Upgrade
+            </button>
+            <div class="user-avatar">C</div>
+        </div>
+    </nav>
+
+    <!-- Main Container -->
+    <div class="main-container">
+        <!-- Left Sidebar -->
+        <aside class="sidebar">
+            <div class="sidebar-item active">
+                <i class="fas fa-bars"></i>
+            </div>
+            <div class="sidebar-item">
+                <i class="fas fa-edit"></i>
+            </div>
+            <div class="sidebar-item" style="margin-top: auto;">
+                <i class="fas fa-cog"></i>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Welcome Section -->
+            <div class="welcome-section">
+                <h1 class="welcome-title">Hello Comet!</h1>
+            </div>
+
+            <!-- Input Section -->
+            <div class="input-section">
+                <div class="input-container">
+                    <input 
+                        type="text" 
+                        class="input-field" 
+                        placeholder="Ask NextAI"
+                        id="promptInput"
+                    >
+                    <div class="input-actions">
+                        <button class="input-action-btn" title="Attach file">
+                            <i class="fas fa-plus"></i>
+                        </button>
+                        <button class="tools-btn">
+                            <i class="fas fa-cog"></i>
+                            Tools
+                        </button>
+                        <button class="send-btn" id="sendBtn" disabled>
+                            <i class="fas fa-paper-plane"></i>
+                        </button>
+                    </div>
+                    <div class="tooltip">Click to go back, hold to see history</div>
+                </div>
+            </div>
+
+            <!-- Action Buttons -->
+            <div class="action-buttons">
+                <button class="action-btn" data-prompt="Show me available courses">
+                    <i class="fas fa-graduation-cap"></i>
+                    Courses
+                </button>
+                <button class="action-btn" data-prompt="Show recent job opportunities">
+                    <i class="fas fa-briefcase"></i>
+                    Recent Jobs
+                </button>
+                <button class="action-btn" data-prompt="Explain technical terms and concepts">
+                    <i class="fas fa-book"></i>
+                    Terms & Concepts
+                </button>
+                <button class="action-btn" data-prompt="Help with project planning and management">
+                    <i class="fas fa-project-diagram"></i>
+                    Project Planning
+                </button>
+                <button class="action-btn" data-prompt="Provide learning resources and tutorials">
+                    <i class="fas fa-lightbulb"></i>
+                    Learning Resources
+                </button>
+            </div>
+
+            <!-- Chat Messages (Initially Hidden) -->
+            <div class="chat-messages" id="chatMessages">
+                <!-- Messages will be added here dynamically -->
+            </div>
+        </main>
+    </div>
+
+    <script>
+        // NextAI Gemini-Style Chat Application
+        class NextAIGeminiStyle {
+            constructor() {
+                this.chatMessages = document.getElementById('chatMessages');
+                this.promptInput = document.getElementById('promptInput');
+                this.sendBtn = document.getElementById('sendBtn');
+                this.welcomeSection = document.querySelector('.welcome-section');
+                this.inputSection = document.querySelector('.input-section');
+                this.actionButtons = document.querySelector('.action-buttons');
+                
+                this.conversationHistory = [];
+                this.isChatMode = false;
+                
+                this.init();
+            }
+            
+            init() {
+                this.setupEventListeners();
+            }
+            
+            setupEventListeners() {
+                // Send message
+                this.sendBtn.addEventListener('click', () => this.sendMessage());
+                
+                // Enter key to send
+                this.promptInput.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter') {
+                        e.preventDefault();
+                        this.sendMessage();
+                    }
+                });
+                
+                // Input change
+                this.promptInput.addEventListener('input', () => {
+                    this.updateSendButton();
+                });
+                
+                // Action buttons
+                document.querySelectorAll('.action-btn').forEach(btn => {
+                    btn.addEventListener('click', (e) => {
+                        const prompt = e.currentTarget.getAttribute('data-prompt');
+                        this.promptInput.value = prompt;
+                        this.updateSendButton();
+                        this.sendMessage();
+                    });
+                });
+            }
+            
+            updateSendButton() {
+                const hasText = this.promptInput.value.trim().length > 0;
+                this.sendBtn.disabled = !hasText;
+            }
+            
+            async sendMessage() {
+                const prompt = this.promptInput.value.trim();
+                if (!prompt) return;
+                
+                // Switch to chat mode
+                if (!this.isChatMode) {
+                    this.enterChatMode();
+                }
+                
+                // Add user message
+                this.addMessage('user', prompt);
+                
+                // Clear input
+                this.promptInput.value = '';
+                this.updateSendButton();
+                
+                // Add typing indicator
+                this.addTypingIndicator();
+                
+                try {
+                    // Simulate API response
+                    const response = await this.getMockResponse(prompt);
+                    
+                    // Remove typing indicator
+                    this.removeTypingIndicator();
+                    
+                    // Add NextAI response
+                    this.addMessage('nextai', response);
+                    
+                } catch (error) {
+                    console.error('Error getting response:', error);
+                    this.removeTypingIndicator();
+                    this.addMessage('nextai', 'Sorry, I encountered an error. Please try again.');
+                }
+            }
+            
+            enterChatMode() {
+                this.isChatMode = true;
+                this.welcomeSection.style.display = 'none';
+                this.actionButtons.style.display = 'none';
+                this.chatMessages.style.display = 'block';
+                this.inputSection.style.marginTop = '20px';
+            }
+            
+            addMessage(type, content) {
+                const messageDiv = document.createElement('div');
+                messageDiv.className = `message ${type}`;
+                
+                const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                
+                messageDiv.innerHTML = `
+                    <div class="message-avatar">
+                        <i class="fas ${type === 'user' ? 'fa-user' : 'fa-user-tie'}"></i>
+                    </div>
+                    <div class="message-content">
+                        <div class="message-bubble">
+                            <div class="message-text">${this.formatMessage(content)}</div>
+                            <div class="message-time">${time}</div>
+                        </div>
+                    </div>
+                `;
+                
+                this.chatMessages.appendChild(messageDiv);
+                this.scrollToBottom();
+                
+                // Store in conversation history
+                this.conversationHistory.push({ type, content, timestamp: new Date() });
+            }
+            
+            addTypingIndicator() {
+                const typingDiv = document.createElement('div');
+                typingDiv.className = 'typing-indicator';
+                typingDiv.id = 'typingIndicator';
+                typingDiv.innerHTML = `
+                    <i class="fas fa-user-tie"></i>
+                    <span>NextAI is thinking</span>
+                    <div class="typing-dots">
+                        <div class="typing-dot"></div>
+                        <div class="typing-dot"></div>
+                        <div class="typing-dot"></div>
+                    </div>
+                `;
+                
+                this.chatMessages.appendChild(typingDiv);
+                this.scrollToBottom();
+            }
+            
+            removeTypingIndicator() {
+                const typingIndicator = document.getElementById('typingIndicator');
+                if (typingIndicator) {
+                    typingIndicator.remove();
+                }
+            }
+            
+            formatMessage(content) {
+                return content
+                    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                    .replace(/\*(.*?)\*/g, '<em>$1</em>')
+                    .replace(/`(.*?)`/g, '<code>$1</code>')
+                    .replace(/\n/g, '<br>');
+            }
+            
+            async getMockResponse(prompt) {
+                // Try to call the real API first
+                try {
+                    const response = await this.callBackendAPI(prompt);
+                    return response;
+                } catch (error) {
+                    console.log('Backend API not available, using mock response');
+                    // Fall back to mock response if API is not available
+                }
+                
+                // Simulate API delay
+                await new Promise(resolve => setTimeout(resolve, 1000 + Math.random() * 2000));
+                
+                const responses = {
+                    'courses': `**Available Courses**
+
+Here are some courses that might interest you:
+
+• **AI & Machine Learning Fundamentals**
+  - Duration: 8 weeks
+  - Level: Beginner
+  - Covers: Python, TensorFlow, Neural Networks
+
+• **Cloud Computing with AWS**
+  - Duration: 12 weeks
+  - Level: Intermediate
+  - Covers: EC2, S3, Lambda, API Gateway
+
+• **Data Science & Analytics**
+  - Duration: 10 weeks
+  - Level: Intermediate
+  - Covers: Statistics, Visualization, Big Data
+
+• **Web Development Full Stack**
+  - Duration: 16 weeks
+  - Level: Beginner to Advanced
+  - Covers: React, Node.js, Databases
+
+Would you like more details about any specific course?`,
+
+                    'recent jobs': `**Recent Job Opportunities**
+
+Here are some recent job postings that match your profile:
+
+• **Senior AI Engineer** - TechCorp
+  - Location: Remote
+  - Salary: $120k - $150k
+  - Requirements: 5+ years ML experience
+
+• **Cloud Solutions Architect** - CloudTech
+  - Location: San Francisco, CA
+  - Salary: $140k - $180k
+  - Requirements: AWS certification, 7+ years experience
+
+• **Full Stack Developer** - StartupXYZ
+  - Location: Austin, TX
+  - Salary: $90k - $120k
+  - Requirements: React, Node.js, 3+ years experience
+
+• **Data Scientist** - DataCorp
+  - Location: New York, NY
+  - Salary: $110k - $140k
+  - Requirements: Python, SQL, Statistics
+
+Would you like me to help you prepare for any of these positions?`,
+
+                    'terms': `**Technical Terms & Concepts**
+
+Here are some important technical terms explained:
+
+• **API Gateway**: A service that acts as a single entry point for multiple backend services, handling routing, authentication, and rate limiting.
+
+• **Microservices**: An architectural approach where applications are built as a collection of loosely coupled, independently deployable services.
+
+• **Containerization**: The process of packaging applications and their dependencies into lightweight, portable containers using tools like Docker.
+
+• **CI/CD**: Continuous Integration/Continuous Deployment - automated processes for building, testing, and deploying code changes.
+
+• **Load Balancing**: Distributing incoming network traffic across multiple servers to ensure high availability and performance.
+
+Would you like me to explain any of these concepts in more detail?`,
+
+                    'project planning': `**Project Planning & Management**
+
+Here's how I can help with your project planning:
+
+• **Project Scope Definition**: Clearly define objectives, deliverables, and constraints
+• **Timeline Creation**: Break down tasks and create realistic schedules
+• **Resource Allocation**: Identify required team members, tools, and budget
+• **Risk Assessment**: Identify potential challenges and mitigation strategies
+• **Progress Tracking**: Set up monitoring and reporting systems
+
+**Popular Project Management Tools:**
+- Jira for issue tracking
+- Trello for task management
+- Asana for team collaboration
+- Microsoft Project for complex planning
+
+What type of project are you planning? I can provide more specific guidance.`,
+
+                    'learning resources': `**Learning Resources & Tutorials**
+
+Here are some excellent learning resources:
+
+• **Online Platforms:**
+  - Coursera: University-level courses
+  - Udemy: Practical, project-based learning
+  - edX: Free courses from top universities
+  - Pluralsight: Technology-focused training
+
+• **Documentation & Guides:**
+  - Official documentation for frameworks
+  - GitHub repositories with examples
+  - Stack Overflow for problem-solving
+  - Medium articles for insights
+
+• **Hands-on Practice:**
+  - LeetCode for coding challenges
+  - HackerRank for skill assessment
+  - Kaggle for data science projects
+  - CodePen for frontend experimentation
+
+What specific skill or technology would you like to learn more about?`
+                };
+                
+                // Find matching response
+                const lowerPrompt = prompt.toLowerCase();
+                for (const [keyword, response] of Object.entries(responses)) {
+                    if (lowerPrompt.includes(keyword)) {
+                        return response;
+                    }
+                }
+                
+                // Generic response
+                const genericResponses = [
+                    `Thank you for your question: "${prompt}". I'm NextAI, your intelligent assistant. I can help you with courses, job opportunities, technical concepts, project planning, and learning resources. What specific area would you like to explore?`,
+                    `I understand you're asking about "${prompt}". NextAI is here to assist you with various topics including professional development, technical learning, and career guidance. How can I help you further?`,
+                    `That's an interesting query about "${prompt}". NextAI specializes in providing comprehensive assistance across multiple domains. What would you like to know more about?`
+                ];
+                
+                return genericResponses[Math.floor(Math.random() * genericResponses.length)];
+            }
+            
+            async callBackendAPI(prompt) {
+                const response = await fetch('/api/chat', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        message: prompt,
+                        conversationId: this.conversationHistory.length > 0 ? 'session_' + Date.now() : 'default',
+                        settings: {
+                            model: 'claude-3-7-sonnet',
+                            temperature: 0.7
+                        }
+                    })
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`API call failed: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                return data.response;
+            }
+            
+            scrollToBottom() {
+                this.chatMessages.scrollTop = this.chatMessages.scrollHeight;
+            }
+        }
+
+        // Initialize NextAI Gemini-Style Chat when the page loads
+        document.addEventListener('DOMContentLoaded', () => {
+            new NextAIGeminiStyle();
+        });
+    </script>
+</body>
+</html>
