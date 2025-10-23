@@ -336,13 +336,13 @@ code {
   font-size: 20px;
 }
 
-.tools-btn {
-  background: #f1f3f4;
+.resume-upload-btn {
+  background: #1a73e8;
   border: none;
   padding: 10px 16px;
   border-radius: 20px;
   cursor: pointer;
-  color: #5f6368;
+  color: white;
   font-size: 15px;
   font-weight: 500;
   display: flex;
@@ -351,9 +351,19 @@ code {
   transition: all 0.2s;
 }
 
-.tools-btn:hover {
-  background-color: #e8eaed;
+.resume-upload-btn:hover {
+  background-color: #1557b0;
   transform: translateY(-1px);
+}
+
+.resume-upload-btn:disabled {
+  background-color: #9aa0a6;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.resume-upload-btn i {
+  font-size: 16px;
 }
 
 .send-btn {
@@ -380,6 +390,61 @@ code {
 
 .send-btn i {
   font-size: 16px;
+}
+
+/* Uploaded file display */
+.uploaded-file-display {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #e8f0fe;
+  border: 1px solid #1a73e8;
+  border-radius: 8px;
+  padding: 8px 12px;
+  margin-top: 8px;
+  font-size: 14px;
+}
+
+.file-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #1a73e8;
+}
+
+.file-info i {
+  font-size: 16px;
+}
+
+.file-name {
+  font-weight: 500;
+}
+
+.file-size {
+  color: #5f6368;
+  font-size: 12px;
+}
+
+.remove-file-btn {
+  background: none;
+  border: none;
+  color: #5f6368;
+  cursor: pointer;
+  font-size: 18px;
+  font-weight: bold;
+  padding: 0;
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  transition: all 0.2s;
+}
+
+.remove-file-btn:hover {
+  background: #f1f3f4;
+  color: #d93025;
 }
 
 /* Action Buttons */

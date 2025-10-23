@@ -1,0 +1,13 @@
+# Environment Variables Configuration
+# Copy this file to .env and fill in your actual values
+
+# AWS Configuration for S3 Integration
+AWS_REGION=us-east-1
+AWS_ACCESS_KEY_ID=your_aws_access_key_id_here
+AWS_SECRET_ACCESS_KEY=your_aws_secret_access_key_here
+S3_BUCKET_NAME=your_s3_bucket_name_here
+
+# Lambda Configuration
+LAMBDA_FUNCTION_URL=your_lambda_function_url_here
+LAMBDA_API_KEY=your_lambda_api_key_here
+LAMBDA_TIMEOUT_MS=55000

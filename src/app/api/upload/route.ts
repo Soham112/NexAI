@@ -20,10 +20,24 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    // Handle base64 data (for file uploads)
+    let body: string | Buffer
+    if (typeof data === 'string' && data.startsWith('data:')) {
+      // Handle data URL format
+      const base64Data = data.split(',')[1]
+      body = Buffer.from(base64Data, 'base64')
+    } else if (typeof data === 'string') {
+      // Handle plain base64 string
+      body = Buffer.from(data, 'base64')
+    } else {
+      // Handle JSON data
+      body = JSON.stringify(data)
+    }
+
     const command = new PutObjectCommand({
       Bucket: process.env.S3_BUCKET_NAME,
       Key: key,
-      Body: typeof data === 'string' ? data : JSON.stringify(data),
+      Body: body,
       ContentType: contentType,
     })
 
