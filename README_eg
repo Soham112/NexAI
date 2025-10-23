@@ -1,0 +1,140 @@
+🧠 UTD Course Job Insight Agent
+
+The UTD Course Job Insight Agent is an intelligent, agent-based system that bridges the gap between university coursework and industry job requirements.
+By integrating real-time job postings with academic course data, the system helps students identify which courses best align with current market demands and career goals.
+
+🚀 Overview
+
+Students often struggle to understand how their academic coursework connects to real-world career opportunities.
+This project addresses that challenge by developing a multi-agent framework that gathers, cleans, and analyzes both academic and job market data.
+The solution leverages Amazon Bedrock AgentCore for natural-language interaction and Retrieval-Augmented Generation (RAG) to deliver personalized, data-driven insights.
+
+🧩 System Architecture
+
+The architecture consists of three main components:
+
+1. Job Market Agent
+
+Scrapes live job postings from company career boards using Greenhouse URLs.
+
+Extracts key fields such as title, responsibilities, required skills, salary range, and location.
+
+Stores data in structured JSON format under raw/ (HTML) and clean/ (processed) folders in Amazon S3.
+
+2. Course Catalog Agent
+
+Crawls the official UTD Course Catalog and UTD Trends Dashboard.
+
+Extracts and enriches course data (course ID, title, description, popularity, and offering terms).
+
+Stores HTML data in raw/ and cleaned datasets in clean/ for ingestion into the knowledge base.
+
+3. Amazon Bedrock AgentCore Integration
+
+Connects cleaned datasets to an Amazon Bedrock Knowledge Base (KB).
+
+Uses vector embeddings for semantic retrieval and contextual reasoning.
+
+Employs the Strands framework and a custom course_kb_search tool to allow natural-language queries like:
+
+“Which UTD courses focus on data analytics and cloud computing?”
+
+🧠 Key Features
+
+🔍 Semantic Search: Retrieve contextually similar results even with different phrasing.
+
+🤖 Agent-Based Architecture: Independent agents handle catalog scraping, job data collection, and reasoning.
+
+💬 Natural-Language Interaction: Users can ask questions conversationally via Bedrock AgentCore.
+
+☁️ Cloud-Native Design: Uses AWS services for storage, scalability, and secure integration.
+
+📊 Data Transparency: All responses are traceable to their original S3 source files.
+
+🧰 Tech Stack
+AWS Services
+
+Amazon S3 – Storage for raw and processed course and job data.
+
+IAM Roles – Secure access management for AWS services.
+
+Amazon Bedrock – Enables RAG-based intelligent reasoning.
+
+CloudWatch – Monitors logs and agent performance.
+
+Frameworks and Libraries
+
+BeautifulSoup – HTML parsing and data extraction.
+
+Playwright – Automated browser interactions for dynamic sites.
+
+CrawlForAI – Custom scraping and structuring framework.
+
+AgentCoreMemoryConfig – Persistent memory management for agents.
+
+React – Front-end interface (if applicable).
+
+APIs
+
+AgentCore API – Connects with Bedrock for retrieval and reasoning.
+
+API Gateway – Facilitates front-end and back-end communication.
+
+⚙️ Setup and Installation
+Prerequisites
+
+Python 3.9+
+
+AWS CLI configured with valid credentials
+
+Playwright dependencies installed
+
+IAM permissions for Bedrock, S3, and CloudWatch
+
+Installation Steps
+# 1. Clone the repository
+git clone https://github.com/your-username/utd-course-job-insight-agent.git
+cd utd-course-job-insight-agent
+
+# 2. Create and activate a virtual environment
+python3 -m venv venv
+source venv/bin/activate   # For Mac/Linux
+venv\Scripts\activate      # For Windows
+
+# 3. Install dependencies
+pip install -r requirements.txt
+
+# 4. Install Playwright browser binaries
+playwright install chromium
+
+🧮 Running the Agents Locally
+a) Run the Job Market Agent
+python3 Job_Market_Agent/main_job.py --s3 --s3-bucket nexai-job-market-data --aws-region us-east-1
+
+b) Run the Course Catalog Agent
+python3 Course_Catalog_Agent/utd_Trends_scrape.py --out-root data --no-headless
+
+c) Launch AgentCore
+agentcore invoke '{"inputText": "Show me UTD courses related to data analytics"}' --agent CourseMatchAI
+
+🧱 Folder Structure
+📦 utd-course-job-insight-agent/
+ ┣ 📂 Job_Market_Agent/
+ ┣ 📂 Course_Catalog_Agent/
+ ┣ 📂 Demo_Agentcore_Bedrock/
+ ┣ 📂 data/
+ ┃ ┣ 📂 raw/
+ ┃ ┣ 📂 clean/
+ ┣ 📜 requirements.txt
+ ┣ 📜 README.md
+ ┗ 📜 .bedrock_agentcore.yaml
+
+🌟 Future Enhancements
+
+Integration of a Project Advisor Agent to suggest portfolio projects and learning paths.
+
+Addition of interactive dashboards using React or Streamlit.
+
+Automatic weekly re-scraping of job boards and catalog updates.
+
+Fine-tuned prompt templates for improved response accuracy.
