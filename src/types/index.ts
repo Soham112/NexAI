@@ -1,6 +1,6 @@
 export interface Message {
   id: string
-  type: 'user' | 'nextai'
+  type: 'user' | 'nexai'
   content: string
   timestamp: Date
 }
@@ -8,7 +8,7 @@ export interface Message {
 export interface ChatContextType {
   messages: Message[]
   isTyping: boolean
-  addMessage: (type: 'user' | 'nextai', content: string) => void
+  addMessage: (type: 'user' | 'nexai', content: string) => void
   setTyping: (isTyping: boolean) => void
   clearMessages: () => void
 }

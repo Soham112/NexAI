@@ -4,7 +4,7 @@ import React, { createContext, useContext, useState, ReactNode } from 'react'
 
 export interface Message {
   id: string
-  type: 'user' | 'nextai'
+  type: 'user' | 'nexai'
   content: string
   timestamp: Date
 }
@@ -12,7 +12,7 @@ export interface Message {
 export interface ChatContextType {
   messages: Message[]
   isTyping: boolean
-  addMessage: (type: 'user' | 'nextai', content: string) => void
+  addMessage: (type: 'user' | 'nexai', content: string) => void
   setTyping: (isTyping: boolean) => void
   clearMessages: () => void
 }
@@ -35,7 +35,7 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({ children }) => {
   const [messages, setMessages] = useState<Message[]>([])
   const [isTyping, setIsTyping] = useState(false)
 
-  const addMessage = (type: 'user' | 'nextai', content: string) => {
+  const addMessage = (type: 'user' | 'nexai', content: string) => {
     const newMessage: Message = {
       id: Date.now().toString(),
       type,

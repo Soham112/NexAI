@@ -116,9 +116,9 @@ What specific skill or technology would you like to learn more about?`
   
   // Generic response
   const genericResponses = [
-    `Thank you for your question: "${prompt}". I'm NextAI, your intelligent assistant. I can help you with courses, job opportunities, technical concepts, project planning, and learning resources. What specific area would you like to explore?`,
-    `I understand you're asking about "${prompt}". NextAI is here to assist you with various topics including professional development, technical learning, and career guidance. How can I help you further?`,
-    `That's an interesting query about "${prompt}". NextAI specializes in providing comprehensive assistance across multiple domains. What would you like to know more about?`
+    `Thank you for your question: "${prompt}". I'm NexAI, your intelligent assistant. I can help you with courses, job opportunities, technical concepts, project planning, and learning resources. What specific area would you like to explore?`,
+    `I understand you're asking about "${prompt}". NexAI is here to assist you with various topics including professional development, technical learning, and career guidance. How can I help you further?`,
+    `That's an interesting query about "${prompt}". NexAI specializes in providing comprehensive assistance across multiple domains. What would you like to know more about?`
   ]
   
   return genericResponses[Math.floor(Math.random() * genericResponses.length)]

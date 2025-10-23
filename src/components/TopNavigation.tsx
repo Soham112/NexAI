@@ -11,7 +11,7 @@ const TopNavigation: React.FC = () => {
           <FaBars />
         </button>
         <div className="logo">
-          <h1>NextAI</h1>
+          <h1>NexAI</h1>
         </div>
       </div>
       <div className="nav-right">

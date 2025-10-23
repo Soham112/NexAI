@@ -6,7 +6,7 @@ import Layout from '../components/Layout'
 const inter = Inter({ subsets: ['latin'] })
 
 export const metadata = {
-  title: 'NextAI - Intelligent Assistant',
+  title: 'NexAI - Intelligent Assistant',
   description: 'AI-powered assistant for courses, jobs, and learning resources',
 }
 

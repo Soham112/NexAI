@@ -10,6 +10,7 @@ const ChatInterface: React.FC = () => {
   const [inputValue, setInputValue] = useState('')
   const { addMessage, isTyping, setTyping } = useChat()
   const inputRef = useRef<HTMLInputElement>(null)
+  const conversationIdRef = useRef<string>(`session_${Date.now()}`)
 
   useEffect(() => {
     if (inputRef.current) {
@@ -20,6 +21,12 @@ const ChatInterface: React.FC = () => {
   const handleSendMessage = async () => {
     const message = inputValue.trim()
     if (!message || isTyping) return
+
+    // Input validation
+    if (message.length > 10000) {
+      addMessage('nexai', 'Message is too long. Please keep it under 10,000 characters.')
+      return
+    }
 
     // Add user message
     addMessage('user', message)
@@ -37,9 +44,9 @@ const ChatInterface: React.FC = () => {
         },
         body: JSON.stringify({
           message,
-          conversationId: 'session_' + Date.now(),
+          conversationId: conversationIdRef.current,
           settings: {
-            model: 'claude-3-7-sonnet',
+            model: 'lambda-bedrock-agent',
             temperature: 0.7
           }
         })
@@ -53,11 +60,24 @@ const ChatInterface: React.FC = () => {
       
       // Remove typing indicator and add response
       setTyping(false)
-      addMessage('nextai', data.response)
+      
+      // Handle different response formats and errors
+      if (data.error) {
+        addMessage('nexai', `Sorry, I encountered an issue: ${data.error}. Please try again.`)
+        return
+      }
+      
+      // Add response with source information if available
+      let responseText = data.response
+      if (data.metadata && data.metadata.sources && data.metadata.sources.length > 0) {
+        responseText += `\n\n*Sources: ${data.metadata.sources.join(', ')}*`
+      }
+      
+      addMessage('nexai', responseText)
     } catch (error) {
       console.error('Error getting response:', error)
       setTyping(false)
-      addMessage('nextai', 'Sorry, I encountered an error. Please try again.')
+      addMessage('nexai', 'Sorry, I encountered an error. Please try again.')
     }
   }
 
@@ -73,6 +93,7 @@ const ChatInterface: React.FC = () => {
   }
 
   const isSendDisabled = !inputValue.trim() || isTyping
+  const isMessageTooLong = inputValue.length > 10000
 
   return (
     <>
@@ -82,7 +103,7 @@ const ChatInterface: React.FC = () => {
             ref={inputRef}
             type="text"
             className="input-field"
-            placeholder="Ask NextAI"
+            placeholder="Ask NexAI"
             value={inputValue}
             onChange={handleInputChange}
             onKeyPress={handleKeyPress}
@@ -105,6 +126,11 @@ const ChatInterface: React.FC = () => {
             </button>
           </div>
           <div className="tooltip">Click to go back, hold to see history</div>
+          {inputValue.length > 0 && (
+            <div className={`character-count ${isMessageTooLong ? 'error' : ''}`}>
+              {inputValue.length}/10,000 characters
+            </div>
+          )}
         </div>
       </div>
 

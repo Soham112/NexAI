@@ -7,7 +7,7 @@ const TypingIndicator: React.FC = () => {
   return (
     <div className="typing-indicator">
       <FaUserTie />
-      <span>NextAI is thinking</span>
+      <span>NexAI is thinking</span>
       <div className="typing-dots">
         <div className="typing-dot"></div>
         <div className="typing-dot"></div>

@@ -28,6 +28,19 @@ const ChatMessages: React.FC = () => {
       .replace(/$/, '</p>')
   }
 
+  const hasSources = (content: string) => {
+    return content.includes('*Sources:')
+  }
+
+  const extractSources = (content: string) => {
+    const sourcesMatch = content.match(/\*Sources: (.*?)\*/)
+    return sourcesMatch ? sourcesMatch[1] : null
+  }
+
+  const removeSources = (content: string) => {
+    return content.replace(/\n\n\*Sources: .*?\*/, '')
+  }
+
   return (
     <div>
       {messages.map((message) => (
@@ -39,8 +52,21 @@ const ChatMessages: React.FC = () => {
             <div className="message-bubble">
               <div 
                 className="message-text"
-                dangerouslySetInnerHTML={{ __html: formatMessage(message.content) }}
+                dangerouslySetInnerHTML={{ 
+                  __html: formatMessage(
+                    hasSources(message.content) 
+                      ? removeSources(message.content) 
+                      : message.content
+                  ) 
+                }}
               />
+              {hasSources(message.content) && (
+                <div className="message-sources">
+                  <small>
+                    <strong>Sources:</strong> {extractSources(message.content)}
+                  </small>
+                </div>
+              )}
               <div className="message-time">
                 {format(message.timestamp, 'HH:mm')}
               </div>
