@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getMockResponse } from '../../../lib/mockResponses'
 
+// Ensure this route runs on the Node.js runtime (not Edge) so we can use longer timeouts.
+export const runtime = 'nodejs'
+// Request the maximum duration supported by your Vercel plan (60s on Pro for Serverless Functions).
+export const maxDuration = 60
+
 export async function POST(request: NextRequest) {
   try {
     const { message, conversationId, settings } = await request.json()
@@ -26,9 +31,10 @@ export async function POST(request: NextRequest) {
         throw new Error('LAMBDA_FUNCTION_URL environment variable is not set')
       }
       
-      // Add timeout to prevent hanging requests
+      // Add timeout to prevent hanging requests. Make it configurable and align below Vercel limit.
       const controller = new AbortController()
-      const timeoutId = setTimeout(() => controller.abort(), 30000) // 30 seconds timeout
+      const lambdaTimeoutMs = Number(process.env.LAMBDA_TIMEOUT_MS || '55000')
+      const timeoutId = setTimeout(() => controller.abort(), lambdaTimeoutMs)
       
       const lambdaResponse = await fetch(process.env.LAMBDA_FUNCTION_URL, {
         method: 'POST',
@@ -68,7 +74,7 @@ export async function POST(request: NextRequest) {
       // Check if it's a timeout error
       const isTimeout = lambdaError instanceof Error && lambdaError.name === 'AbortError'
       if (isTimeout) {
-        console.log('Lambda function timed out after 30 seconds')
+        console.log(`Lambda function timed out after ${process.env.LAMBDA_TIMEOUT_MS || '55000'} ms`)
       }
       
       // Fall back to mock response
