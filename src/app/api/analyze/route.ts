@@ -102,9 +102,9 @@ export async function POST(request: NextRequest) {
     } catch (fetchError) {
       console.error('Lambda function fetch error:', fetchError)
       console.error('Error details:', {
-        message: fetchError.message,
-        name: fetchError.name,
-        stack: fetchError.stack
+        message: fetchError instanceof Error ? fetchError.message : 'Unknown error',
+        name: fetchError instanceof Error ? fetchError.name : 'Unknown',
+        stack: fetchError instanceof Error ? fetchError.stack : undefined
       })
       // Return fallback response if external endpoint fails
       return NextResponse.json({
