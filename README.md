@@ -1,20 +1,23 @@
 # NexAI - Intelligent Assistant
 
-A modern Next.js application with AI-powered chat interface, designed to integrate with AWS Bedrock agents and S3 bucket data for intelligent course catalog and job market assistance.
+A modern Next.js application with AI-powered chat interface, designed to integrate with AWS Lambda agents and S3 bucket data for intelligent course catalog and job market assistance.
 
 ![NextAI Interface](https://img.shields.io/badge/Next.js-14.0.4-black?style=for-the-badge&logo=next.js)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.3.3-blue?style=for-the-badge&logo=typescript)
-![AWS](https://img.shields.io/badge/AWS-Bedrock%20%7C%20S3-orange?style=for-the-badge&logo=amazon-aws)
+![AWS](https://img.shields.io/badge/AWS-Lambda%20%7C%20S3-orange?style=for-the-badge&logo=amazon-aws)
 
 ## 🚀 Features
 
-- **Modern Gemini-style Chat Interface**: Clean, responsive design inspired by Google's Gemini
-- **AWS Bedrock Integration**: AI-powered responses using Claude models
+- **Modern Chat Interface**: Clean, responsive design with real-time messaging
+- **AWS Lambda Integration**: AI-powered responses using Bedrock agents via Lambda functions
+- **Resume Upload**: Upload and store resumes directly to S3 bucket with file validation
 - **S3 Data Integration**: Real-time access to course catalog and job market data
 - **Script Integration**: Seamless integration with existing Python scripts
 - **Real-time Chat**: Interactive conversation with typing indicators
 - **Responsive Design**: Works perfectly on desktop, tablet, and mobile devices
 - **TypeScript Support**: Full type safety and better development experience
+- **File Management**: Support for PDF, Word documents, and text files
+- **Error Handling**: Comprehensive error handling and user feedback
 
 ## 📋 Prerequisites
 
@@ -22,7 +25,7 @@ Before you begin, ensure you have the following installed:
 
 - **Node.js** 18.0 or higher ([Download](https://nodejs.org/))
 - **npm** or **yarn** package manager
-- **AWS Account** with Bedrock and S3 access
+- **AWS Account** with Lambda, Bedrock, and S3 access
 - **Python** 3.8+ (for existing scripts integration)
 
 ## 🛠️ Installation & Setup
@@ -32,7 +35,7 @@ Before you begin, ensure you have the following installed:
 ```bash
 git clone <your-repository-url>
 cd NexAI
-git checkout rishabh
+git checkout main
 ```
 
 ### 2. Install Dependencies
@@ -57,26 +60,28 @@ AWS_REGION=us-east-1
 AWS_ACCESS_KEY_ID=your_aws_access_key_here
 AWS_SECRET_ACCESS_KEY=your_aws_secret_key_here
 
-# Bedrock Configuration
-BEDROCK_MODEL_ID=anthropic.claude-3-sonnet-20240229-v1:0
+# Lambda Configuration
+LAMBDA_FUNCTION_URL=your_lambda_function_url_here
+LAMBDA_API_KEY=your_lambda_api_key_here
+LAMBDA_TIMEOUT_MS=55000
 
 # S3 Configuration
 S3_BUCKET_NAME=your_s3_bucket_name_here
 
 # Optional: Custom configurations
-NEXT_PUBLIC_APP_NAME=NextAI
+NEXT_PUBLIC_APP_NAME=NexAI
 NEXT_PUBLIC_APP_VERSION=1.0.0
 ```
 
 ### 4. AWS Setup
 
-#### Enable Bedrock Access
-1. Go to [AWS Bedrock Console](https://console.aws.amazon.com/bedrock/)
-2. Enable Claude models in your region
-3. Ensure your AWS credentials have `bedrock:InvokeModel` permissions
+#### Lambda Function Setup
+1. Deploy your Bedrock agent as a Lambda function
+2. Configure Lambda function URL for HTTP access
+3. Ensure your AWS credentials have Lambda invoke permissions
 
 #### S3 Setup
-1. Create an S3 bucket for data storage
+1. Create an S3 bucket for data storage and resume uploads
 2. Ensure your AWS credentials have S3 read/write permissions
 3. Upload your data files to the bucket:
    ```
@@ -90,6 +95,9 @@ NEXT_PUBLIC_APP_VERSION=1.0.0
    │       │   └── sections.jsonl
    │       └── utdtrends/
    │           └── trends.jsonl
+   ├── resumes/
+   │   └── session_*/
+   │       └── *.pdf
    ```
 
 ### 5. Run the Application
@@ -106,52 +114,6 @@ npm start
 ```
 
 The application will be available at `http://localhost:3000`
-
-## 🔧 API Endpoints
-
-### Chat API
-- **POST** `/api/chat` - Send messages to AI assistant
-- **Body**: `{ message: string, conversationId?: string, settings?: object }`
-
-### Data APIs
-- **GET** `/api/courses` - Fetch course catalog data from S3
-- **GET** `/api/jobs` - Fetch job market data from S3
-- **GET** `/api/data?type=catalog|coursebook|trends|all` - Fetch local data files
-
-### Script Integration APIs
-- **POST** `/api/scripts` - Execute Python scripts
-- **GET** `/api/scripts/list` - List available scripts
-- **POST** `/api/upload` - Upload data to S3
-
-## 🔗 Integration with Existing Scripts
-
-The application seamlessly integrates with your existing Python scripts:
-
-### Course Catalog Agent
-```typescript
-// Execute course catalog script
-const response = await fetch('/api/scripts', {
-  method: 'POST',
-  headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify({
-    scriptType: 'course-catalog',
-    parameters: ['--update', '--format', 'json']
-  })
-})
-```
-
-### Job Market Agent
-```typescript
-// Execute job scraping script
-const response = await fetch('/api/scripts', {
-  method: 'POST',
-  headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify({
-    scriptType: 'job-scraper',
-    parameters: ['--location', 'remote', '--salary', '100000']
-  })
-})
-```
 
 ## 📁 Project Structure
 
@@ -191,6 +153,96 @@ NexAI/
 └── README.md
 ```
 
+## 🔧 API Endpoints
+
+### Chat API
+- **POST** `/api/chat` - Send messages to AI assistant
+- **Body**: `{ message: string, conversationId?: string, settings?: object }`
+
+### Data APIs
+- **GET** `/api/courses` - Fetch course catalog data from S3
+- **GET** `/api/jobs` - Fetch job market data from S3
+- **GET** `/api/data?type=catalog|coursebook|trends|all` - Fetch local data files
+
+### Script Integration APIs
+- **POST** `/api/scripts` - Execute Python scripts
+- **GET** `/api/scripts/list` - List available scripts
+- **POST** `/api/upload` - Upload files (including resumes) to S3
+
+## 🔗 Integration with Existing Scripts
+
+The application seamlessly integrates with your existing Python scripts:
+
+### Course Catalog Agent
+```typescript
+// Execute course catalog script
+const response = await fetch('/api/scripts', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    scriptType: 'course-catalog',
+    parameters: ['--update', '--format', 'json']
+  })
+})
+```
+
+### Job Market Agent
+```typescript
+// Execute job scraping script
+const response = await fetch('/api/scripts', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    scriptType: 'job-scraper',
+    parameters: ['--location', 'remote', '--salary', '100000']
+  })
+})
+```
+
+### UTD Trends Scraper
+```typescript
+// Execute trends scraping script
+const response = await fetch('/api/scripts', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    scriptType: 'utd-trends',
+    parameters: ['--date', '2024-01-01']
+  })
+})
+```
+
+## 📄 Resume Upload Feature
+
+The application includes a built-in resume upload feature that allows users to upload their resumes directly to S3:
+
+### Supported File Types
+- **PDF** (.pdf)
+- **Word Documents** (.doc, .docx)
+- **Text Files** (.txt)
+
+### File Validation
+- **Maximum Size**: 10MB
+- **File Type Validation**: Only allowed file types are accepted
+- **Error Handling**: Clear error messages for invalid files
+
+### Upload Process
+1. User clicks "Resume" button in chat interface
+2. File picker opens with supported file types
+3. File is validated for type and size
+4. File is converted to base64 and uploaded to S3
+5. Success confirmation is shown in chat
+
+### S3 Organization
+Resumes are organized in S3 with the following structure:
+```
+resumes/
+└── session_{conversationId}/
+    └── {timestamp}.{extension}
+```
+
+Example: `resumes/session_1761254058565/1761254101924.pdf`
+
 ## 🎨 Customization
 
 ### Styling
@@ -216,63 +268,32 @@ All components are modular and can be easily customized:
 3. Add environment variables in Vercel dashboard
 4. Deploy automatically
 
-### AWS Amplify
-1. Connect GitHub repository
-2. Configure build settings
-3. Add environment variables
-4. Deploy
-
-### Docker
-```dockerfile
-FROM node:18-alpine AS base
-
-FROM base AS deps
-RUN apk add --no-cache libc6-compat
-WORKDIR /app
-COPY package.json package-lock.json* ./
-RUN npm ci
-
-FROM base AS builder
-WORKDIR /app
-COPY --from=deps /app/node_modules ./node_modules
-COPY . .
-RUN npm run build
-
-FROM base AS runner
-WORKDIR /app
-ENV NODE_ENV production
-RUN addgroup --system --gid 1001 nodejs
-RUN adduser --system --uid 1001 nextjs
-COPY --from=builder /app/public ./public
-RUN mkdir .next
-RUN chown nextjs:nodejs .next
-COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
-COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
-USER nextjs
-EXPOSE 3000
-ENV PORT 3000
-CMD ["node", "server.js"]
-```
-
 ## 🔍 Troubleshooting
 
 ### Common Issues
 
 1. **AWS Credentials Error**
    - Verify AWS credentials in `.env.local`
-   - Check IAM permissions for Bedrock and S3
+   - Check IAM permissions for Lambda, Bedrock, and S3
 
-2. **Script Execution Fails**
+2. **Lambda Function Timeout**
+   - Check Lambda function timeout settings
+   - Verify LAMBDA_TIMEOUT_MS environment variable
+   - Ensure Lambda function URL is accessible
+
+3. **Script Execution Fails**
    - Ensure Python scripts are executable
    - Check file paths and dependencies
 
-3. **S3 Access Denied**
+4. **S3 Access Denied**
    - Verify bucket permissions
    - Check bucket name in environment variables
+   - Ensure S3 bucket exists and is accessible
 
-4. **Bedrock Model Not Available**
-   - Enable Claude models in AWS Bedrock console
-   - Verify model ID in environment variables
+5. **Resume Upload Fails**
+   - Check S3 bucket permissions for PutObject
+   - Verify file size limits (max 10MB)
+   - Check supported file types (PDF, DOC, DOCX, TXT)
 
 ### Debug Mode
 Enable debug logging by setting:
@@ -309,12 +330,12 @@ For support and questions:
 
 ## 🙏 Acknowledgments
 
-- Inspired by Google's Gemini interface design
 - Built with Next.js and React
-- Powered by AWS Bedrock and Claude AI models
+- Powered by AWS Lambda, Bedrock, and S3 services
+- Modern chat interface design
 
 ---
 
-**NextAI** - Your intelligent assistant for courses, jobs, and learning resources.
+**NexAI** - Your intelligent assistant for courses, jobs, and learning resources.
 
-Made with ❤️ using Next.js, TypeScript, and AWS services.
+Made with using Next.js, TypeScript, and AWS services.

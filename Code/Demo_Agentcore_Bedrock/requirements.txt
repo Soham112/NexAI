@@ -1,7 +1,0 @@
-strands-agents
-bedrock-agentcore
-requests
-beautifulsoup4
-lxml
-tenacity
-playwright
