@@ -21,20 +21,6 @@ const ChatInterface: React.FC = () => {
     }
   }, [])
 
-  // Helper function to convert file to base64
-  const fileToBase64 = (file: File): Promise<string> => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader()
-      reader.readAsDataURL(file)
-      reader.onload = () => {
-        const result = reader.result as string
-        // Remove the data URL prefix (e.g., "data:application/pdf;base64,")
-        const base64 = result.split(',')[1]
-        resolve(base64)
-      }
-      reader.onerror = error => reject(error)
-    })
-  }
 
   const handleSendMessage = async () => {
     const message = inputValue.trim()
@@ -130,42 +116,82 @@ const ChatInterface: React.FC = () => {
       addMessage('nexai', `Uploading resume: ${file.name}...`)
       
       try {
-        // Convert file to base64 for upload
-        const fileData = await fileToBase64(file)
+        // Use proxy upload to avoid CORS and permission issues
+        const formData = new FormData()
+        formData.append('file', file)
+        formData.append('conversationId', conversationIdRef.current)
         
-        // Generate unique key for S3
-        const timestamp = Date.now()
-        const fileExtension = file.name.split('.').pop()
-        const s3Key = `resumes/${conversationIdRef.current}/${timestamp}.${fileExtension}`
+        const uploadResponse = await fetch('/api/upload-proxy', {
+          method: 'POST',
+          body: formData
+        })
         
-        // Upload to S3 via API
-        const response = await fetch('/api/upload', {
+        if (!uploadResponse.ok) {
+          throw new Error(`Upload failed: ${uploadResponse.status}`)
+        }
+        
+        const { s3Key } = await uploadResponse.json()
+        
+        // Step 3: Analyze the uploaded resume
+        addMessage('nexai', `✅ Resume uploaded successfully: ${file.name}`)
+        addMessage('nexai', `🔍 Analyzing resume for career insights...`)
+        
+        const analysisResponse = await fetch('/api/analyze', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            data: fileData,
-            key: s3Key,
-            contentType: file.type
+            s3Key,
+            userPrompt: 'Analyze my resume and suggest suitable roles, relevant courses, missing skills, and project ideas.',
+            conversationId: conversationIdRef.current
           })
         })
         
-        if (!response.ok) {
-          throw new Error(`Upload failed: ${response.status}`)
+        if (!analysisResponse.ok) {
+          throw new Error(`Analysis failed: ${analysisResponse.status}`)
         }
         
-        const uploadResult = await response.json()
+        const analysisResult = await analysisResponse.json()
         
-        if (uploadResult.success) {
+        if (analysisResult.success) {
           setUploadedFile(file)
-          addMessage('nexai', `✅ Resume uploaded successfully: ${file.name}`)
+          
+          // Display the analysis results in the chat
+          const analysisData = analysisResult.analysis
+          let analysisMessage = `📊 Resume Analysis Complete!\n\n`
+          
+          if (analysisData.insights) {
+            analysisMessage += `**Analysis Insights:**\n${analysisData.insights}\n\n`
+          }
+          
+          if (analysisData.recommendedRoles && analysisData.recommendedRoles.length > 0) {
+            analysisMessage += `**🎯 Recommended Roles:**\n${analysisData.recommendedRoles.map(role => `• ${role}`).join('\n')}\n\n`
+          }
+          
+          if (analysisData.missingSkills && analysisData.missingSkills.length > 0) {
+            analysisMessage += `**🔧 Missing Skills to Develop:**\n${analysisData.missingSkills.map(skill => `• ${skill}`).join('\n')}\n\n`
+          }
+          
+          if (analysisData.projectIdeas && analysisData.projectIdeas.length > 0) {
+            analysisMessage += `**💡 Project Ideas:**\n${analysisData.projectIdeas.map(project => `• ${project}`).join('\n')}\n\n`
+          }
+          
+          if (analysisData.relevantCourses && analysisData.relevantCourses.length > 0) {
+            analysisMessage += `**📚 Relevant Courses:**\n${analysisData.relevantCourses.map(course => `• ${course}`).join('\n')}\n\n`
+          }
+          
+          // Add S3 key info
+          analysisMessage += `**📁 Resume Location:** ${analysisResult.s3Key}`
+          
+          addMessage('nexai', analysisMessage)
         } else {
-          throw new Error('Upload failed')
+          throw new Error('Analysis failed')
         }
+        
       } catch (error) {
-        console.error('Upload error:', error)
-        addMessage('nexai', `❌ Failed to upload resume: ${error instanceof Error ? error.message : 'Unknown error'}`)
+        console.error('Upload/Analysis error:', error)
+        addMessage('nexai', `❌ Failed to process resume: ${error instanceof Error ? error.message : 'Unknown error'}`)
       } finally {
         setIsUploading(false)
       }
@@ -232,27 +258,6 @@ const ChatInterface: React.FC = () => {
             style={{ display: 'none' }}
           />
           <div className="tooltip">Click to go back, hold to see history</div>
-          {inputValue.length > 0 && (
-            <div className={`character-count ${isMessageTooLong ? 'error' : ''}`}>
-              {inputValue.length}/10,000 characters
-            </div>
-          )}
-          {uploadedFile && (
-            <div className="uploaded-file-display">
-              <div className="file-info">
-                {getFileIcon(uploadedFile)}
-                <span className="file-name">{uploadedFile.name}</span>
-                <span className="file-size">({(uploadedFile.size / 1024).toFixed(1)} KB)</span>
-              </div>
-              <button 
-                className="remove-file-btn" 
-                onClick={removeFile}
-                title="Remove file"
-              >
-                ×
-              </button>
-            </div>
-          )}
         </div>
       </div>
 

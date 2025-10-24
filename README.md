@@ -68,6 +68,10 @@ LAMBDA_TIMEOUT_MS=55000
 # S3 Configuration
 S3_BUCKET_NAME=your_s3_bucket_name_here
 
+# Resume Upload & Analysis Endpoints
+NEXT_PUBLIC_UPLOAD_URL_ENDPOINT=/api/upload-url
+NEXT_PUBLIC_ANALYZE_ENDPOINT=your_lambda_function_url_here
+
 # Optional: Custom configurations
 NEXT_PUBLIC_APP_NAME=NexAI
 NEXT_PUBLIC_APP_VERSION=1.0.0
@@ -167,7 +171,10 @@ NexAI/
 ### Script Integration APIs
 - **POST** `/api/scripts` - Execute Python scripts
 - **GET** `/api/scripts/list` - List available scripts
-- **POST** `/api/upload` - Upload files (including resumes) to S3
+- **POST** `/api/upload` - Upload files (including resumes) to S3 (legacy)
+- **POST** `/api/upload-url` - Generate presigned S3 URL for secure uploads
+- **POST** `/api/upload-proxy` - Server-side file upload to S3 (current method)
+- **POST** `/api/analyze` - Analyze uploaded resume using Lambda function
 
 ## 🔗 Integration with Existing Scripts
 
@@ -212,9 +219,9 @@ const response = await fetch('/api/scripts', {
 })
 ```
 
-## 📄 Resume Upload Feature
+## 📄 Resume Upload & Analysis Feature
 
-The application includes a built-in resume upload feature that allows users to upload their resumes directly to S3:
+The application includes a secure resume upload and analysis feature that provides personalized career insights:
 
 ### Supported File Types
 - **PDF** (.pdf)
@@ -226,12 +233,22 @@ The application includes a built-in resume upload feature that allows users to u
 - **File Type Validation**: Only allowed file types are accepted
 - **Error Handling**: Clear error messages for invalid files
 
-### Upload Process
-1. User clicks "Resume" button in chat interface
-2. File picker opens with supported file types
-3. File is validated for type and size
-4. File is converted to base64 and uploaded to S3
-5. Success confirmation is shown in chat
+### Upload & Analysis Process
+1. **Step 1**: User clicks "Resume" button in chat interface
+2. **Step 2**: File picker opens with supported file types
+3. **Step 3**: File is validated for type and size
+4. **Step 4**: File is uploaded to S3 via server-side proxy
+5. **Step 5**: System calls Lambda function to analyze the resume
+6. **Step 6**: Lambda function processes resume with Bedrock Agent
+7. **Step 7**: AI analysis returns structured career insights
+
+### Analysis Features
+The Lambda function with Bedrock Agent analyzes resumes and provides:
+- **Recommended Roles**: Suitable job positions based on experience
+- **Relevant Courses**: Educational opportunities to enhance skills
+- **Missing Skills**: Skills gaps and improvement areas
+- **Project Ideas**: Portfolio projects to strengthen profile
+- **Structured Output**: JSON-formatted insights for easy parsing
 
 ### S3 Organization
 Resumes are organized in S3 with the following structure:
@@ -242,6 +259,21 @@ resumes/
 ```
 
 Example: `resumes/session_1761254058565/1761254101924.pdf`
+
+### Current Implementation
+The system uses a **server-side proxy upload** approach:
+- Files are uploaded through `/api/upload-proxy` endpoint
+- Server handles S3 upload using AWS credentials
+- Lambda function receives S3 key for analysis
+- No CORS issues or client-side credential exposure
+- Clean, minimal UI without file display clutter
+
+### Security Benefits
+- **Server-Side Upload**: Files uploaded through secure server-side proxy
+- **AWS Credentials Protection**: Credentials only used server-side
+- **Lambda Function Security**: Analysis performed in secure AWS environment
+- **File Validation**: Comprehensive validation before upload
+- **Error Handling**: Graceful fallback for failed analysis
 
 ## 🎨 Customization
 
@@ -294,6 +326,13 @@ All components are modular and can be easily customized:
    - Check S3 bucket permissions for PutObject
    - Verify file size limits (max 10MB)
    - Check supported file types (PDF, DOC, DOCX, TXT)
+   - Ensure server-side proxy has proper AWS credentials
+
+6. **Lambda Function Analysis Fails**
+   - Verify Lambda function URL is correct
+   - Check Lambda function logs in AWS CloudWatch
+   - Ensure Lambda function has S3 read permissions
+   - Verify Bedrock Agent is properly configured
 
 ### Debug Mode
 Enable debug logging by setting:

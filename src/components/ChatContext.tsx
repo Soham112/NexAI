@@ -37,7 +37,7 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({ children }) => {
 
   const addMessage = (type: 'user' | 'nexai', content: string) => {
     const newMessage: Message = {
-      id: Date.now().toString(),
+      id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
       type,
       content,
       timestamp: new Date(),
