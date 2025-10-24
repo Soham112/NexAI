@@ -1,112 +1,35 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-"""
-Greenhouse Job Scraper — S3 Enabled Version
-Collects postings from multiple companies, saves locally and/or uploads to S3.
 
-Usage (to write at bucket root under links/, raw/, extracted/):
-  python3 job_scrape.py --limit -1 --s3 \
-    --s3-bucket nexai-job-market-data \
-    --s3-prefix "" \
-    --aws-region us-east-1
-"""
-
-import os, re, io, sys, json, time, argparse, datetime as dt, boto3, requests
-from typing import List, Dict, Optional
-from pathlib import Path
+import os
+import re
+import io
+import json
+import time
+import argparse
+import logging
+from dataclasses import dataclass, asdict
+from typing import List, Dict, Optional, Iterable, Tuple
+from urllib.parse import urljoin, urlparse
+import requests
 from bs4 import BeautifulSoup
 
-# ======================================================================
-# CONFIG / CONSTANTS
-# ======================================================================
-
-DATE_STR = dt.date.today().strftime("%Y-%m-%d")
-
-# ======================================================================
-# UTILITY FUNCTIONS
-# ======================================================================
-
-def resolve_companies_yaml(cli_value: Optional[str]) -> str:
-    """
-    Locate companies.yaml even if the script is run from another directory.
-    Priority:
-      1) --companies-yaml value (if provided)
-      2) <this_file_dir>/config/companies.yaml
-      3) CWD/companies.yaml
-      4) CWD/config/companies.yaml
-    """
-    if cli_value:
-        p = Path(cli_value).expanduser().resolve()
-        if not p.exists():
-            raise FileNotFoundError(f"--companies-yaml not found: {p}")
-        return str(p)
-
-    here = Path(__file__).parent.resolve()
-    candidates = [
-        here / "config" / "companies.yaml",      # Job_market_agent/config/companies.yaml
-        Path.cwd() / "companies.yaml",
-        Path.cwd() / "config" / "companies.yaml",
-    ]
-    for c in candidates:
-        if c.exists():
-            return str(c.resolve())
-
-    raise FileNotFoundError(
-        "companies.yaml not found. Place it in Job_market_agent/config/ or pass --companies-yaml <path>."
-    )
-
-def load_companies(yaml_path: str) -> List[str]:
-    """Load company list from YAML file (supports categories)."""
-    import yaml
-    with open(yaml_path, "r", encoding="utf-8") as f:
-        data = yaml.safe_load(f) or {}
-    companies: List[str] = []
-    for _, items in data.items():
-        if isinstance(items, list):
-            companies += items
-        elif isinstance(items, dict):
-            for _, vals in items.items():
-                if isinstance(vals, list):
-                    companies += vals
-    # order-preserving de-dupe and drop empties
-    seen, out = set(), []
-    for c in companies:
-        if c and c not in seen:
-            seen.add(c)
-            out.append(c)
-    return out
-
-def clean_text(text: str) -> str:
-    return re.sub(r"\s+", " ", text or "").strip()
-
-
-# ======================================================================
-# S3 STORAGE CLASS
-# ======================================================================
-
+# ======== AWS S3 storage ==========
 class S3Storage:
-    def __init__(self, bucket: str, prefix: str, region: str):
-
-        region = region.strip()
-        if region.endswith("1") and "-" not in region:
-            region = region.replace("east1", "east-1").replace("west1", "west-1")
-            
+    """
+    Write JSONL files to fixed keys:
+      links/links_all_all.jsonl
+      raw/raw_all_all.jsonl
+      extracted/extracted_all_all.jsonl
+    """
+    def __init__(self, bucket: str, region: str | None = None):
+        try:
+            import boto3
+        except ImportError:
+            raise SystemExit("boto3 is required for S3 mode. Install with: pip install boto3")
         self.bucket = bucket
-        self.prefix = (prefix or "").strip("/")  # allow empty -> bucket root
-        self.region = region
-        self.s3 = boto3.client("s3", region_name=self.region)
+        self.s3 = boto3.client("s3", region_name=region)
 
-    def _join_key(self, *parts: str) -> str:
-        segs = []
-        for p in parts:
-            if p is None:
-                continue
-            p = str(p).strip("/")
-            if p:
-                segs.append(p)
-        return "/".join(segs)
-
-    def _put_lines(self, key: str, lines_iter):
+    def _put_lines(self, key: str, lines_iter) -> str:
         buf = io.StringIO()
         for line in lines_iter:
             buf.write(line)
@@ -114,174 +37,385 @@ class S3Storage:
                 buf.write("\n")
         body = buf.getvalue().encode("utf-8")
         self.s3.put_object(Bucket=self.bucket, Key=key, Body=body)
-        print(f"✅ Uploaded → s3://{self.bucket}/{key}")
         return f"s3://{self.bucket}/{key}"
 
-    def save_jsonl(self, filename: str, rows, folder: Optional[str] = None, add_date: bool = False):
-        parts = [self.prefix]
-        if folder:
-            parts.append(folder)
-        if add_date:
-            parts.append(DATE_STR)
-        parts.append(filename)
-        key = self._join_key(*parts)
-        lines = (json.dumps(r, ensure_ascii=False) for r in rows)
-        return self._put_lines(key, lines)
+    def write_links(self, links: Dict[str, List[str]], role: str, city: str) -> str:
+        key = "links/links_all_all.jsonl"
+        def gen():
+            for source, urls in links.items():
+                for u in urls:
+                    yield json.dumps({"source": source, "url": u}, ensure_ascii=False)
+        return self._put_lines(key, gen())
 
+    def write_raw(self, jobs: List["RawJob"], role: str, city: str) -> str:
+        key = "raw/raw_all_all.jsonl"
+        def gen():
+            for j in jobs:
+                yield j.to_json()
+        return self._put_lines(key, gen())
 
-# ======================================================================
-# LOCAL STORAGE CLASS
-# ======================================================================
+    def write_extracted(self, jobs: List["ExtractedJob"], role: str, city: str) -> str:
+        key = "extracted/extracted_all_all.jsonl"
+        def gen():
+            for j in jobs:
+                yield j.to_json()
+        return self._put_lines(key, gen())
 
-class LocalStorage:
-    def __init__(self, base_dir: str):
-        self.base_dir = base_dir
-        os.makedirs(base_dir, exist_ok=True)
+# ========== Data models ============
+@dataclass
+class RawJob:
+    url: str
+    company: Optional[str]
+    title: Optional[str]
+    location: Optional[str]
+    html: str
+    text: str
 
-    def save_jsonl(self, filename: str, rows, folder: Optional[str] = None, add_date: bool = False):
-        subdir = self.base_dir
-        if folder:
-            subdir = os.path.join(subdir, folder)
-        if add_date:
-            subdir = os.path.join(subdir, DATE_STR)
-        os.makedirs(subdir, exist_ok=True)
+    def to_json(self) -> str:
+        return json.dumps(asdict(self), ensure_ascii=False)
 
-        path = os.path.join(subdir, filename)
-        with open(path, "w", encoding="utf-8") as f:
-            for r in rows:
-                f.write(json.dumps(r, ensure_ascii=False) + "\n")
-        print(f"💾 Saved → {path}")
-        return path
+@dataclass
+class ExtractedJob:
+    url: str
+    company: Optional[str]
+    title: Optional[str]
+    location: Optional[str]
+    work_mode: Optional[str] = None
+    employment_type: Optional[str] = None
+    skills: Optional[List[str]] = None
+    responsibilities: Optional[List[str]] = None
+    qualifications: Optional[List[str]] = None
+    experience_level: Optional[str] = None
+    sector: Optional[str] = None
+    country: Optional[str] = None
+    city_state: Optional[str] = None
+    salary_min: Optional[int] = None
+    salary_max: Optional[int] = None
+    salary_unit: Optional[str] = None
+    salary_currency: Optional[str] = None
 
+    def to_json(self) -> str:
+        obj = asdict(self)
+        for k in ("skills", "responsibilities", "qualifications"):
+            if obj.get(k) is None:
+                obj[k] = []
+        return json.dumps(obj, ensure_ascii=False)
 
-# ======================================================================
-# SCRAPER LOGIC
-# ======================================================================
+# ========== Scraping logic & helpers =============
+DEFAULT_UA = (
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+    "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
+)
 
-def get_greenhouse_urls(company: str) -> List[str]:
-    """Get all job URLs from a Greenhouse company careers page (single-page scrape)."""
-    urls = []
-    gh_url = f"https://boards.greenhouse.io/{company}"
-    try:
-        r = requests.get(gh_url, timeout=10)
-        if r.status_code != 200:
-            return []
-        soup = BeautifulSoup(r.text, "html.parser")
-        for a in soup.select("a[href*='/jobs/']"):
-            href = a.get("href", "")
-            if not href:
-                continue
-            if href.startswith("/"):
-                href = f"https://boards.greenhouse.io{href}"
-            urls.append(href)
-        return list(dict.fromkeys(urls))
-    except Exception as e:
-        print(f"⚠️ Error fetching {company}: {e}")
-        return []
+SESSION = requests.Session()
+SESSION.headers.update({"User-Agent": DEFAULT_UA})
 
-
-def get_all_job_urls(companies: List[str], limit: int) -> List[str]:
-    all_urls = []
-    for company in companies:
-        urls = get_greenhouse_urls(company)
-        print(f"INFO: {company}: {len(urls)} matches")
-        all_urls.extend(urls)
-        if limit > 0 and len(all_urls) >= limit:
-            break
-    dedup = list(dict.fromkeys(all_urls))
-    return dedup if limit <= 0 else dedup[:limit]
-
-
-def fetch_job_page(url: str) -> Optional[str]:
-    try:
-        r = requests.get(url, timeout=10)
-        if r.status_code == 200:
-            return r.text
-    except Exception as e:
-        print(f"⚠️ Error fetching {url}: {e}")
+def fetch(url: str, retries: int = 3, backoff: float = 1.5) -> Optional[str]:
+    for i in range(retries):
+        try:
+            r = SESSION.get(url, timeout=30)
+            if r.status_code == 200 and r.text:
+                return r.text
+            if r.status_code in (403, 429):
+                time.sleep(backoff * (i + 1))
+        except Exception as e:
+            logging.debug(f"Fetch error on {url}: {e}")
+            time.sleep(backoff * (i + 1))
     return None
 
+def soup_text(soup: BeautifulSoup) -> str:
+    for tag in soup(["script", "style", "noscript"]):
+        tag.decompose()
+    txt = soup.get_text("\n")
+    lines = [re.sub(r"\s+", " ", ln).strip() for ln in txt.splitlines()]
+    return "\n".join([ln for ln in lines if ln])
 
-def extract_fields_from_html(html: str) -> Dict[str, str]:
-    soup = BeautifulSoup(html, "html.parser")
-    h1 = soup.select_one("h1.app-title") or soup.select_one("h1")
-    title = clean_text(h1.get_text() if h1 else "")
-    loc_el = soup.select_one("div.location") or soup.find("span", class_="location")
-    location = clean_text(loc_el.get_text()) if loc_el else ""
-    dept_el = soup.select_one(".department") or soup.find("a", {"href": re.compile("departments")})
-    department = clean_text(dept_el.get_text()) if dept_el else ""
-    content = soup.select_one("div#content") or soup.find("div", class_="content")
-    desc = clean_text(content.get_text() if content else "")
-    return {
-        "title": title,
-        "location": location,
-        "department": department,
-        "description": desc
-    }
+def _norm(s: str) -> str:
+    return re.sub(r"\s+", " ", (s or "")).strip()
 
+LEVEL_PATTERNS = [
+    ("intern", r"\b(intern|co-?op|apprentice(ship)?)\b"),
+    ("entry", r"\b(junior|jr\.?|new grad|newgrad|graduate)\b"),
+    ("manager", r"\b(manager|managing|lead|head of|director|vp|vice president)\b"),
+    ("staff", r"\b(staff|principal|distinguished|fellow)\b"),
+    ("senior", r"\b(senior|sr\.?)\b"),
+]
+LEVEL_RX = [(lbl, re.compile(rx, re.I)) for lbl, rx in LEVEL_PATTERNS]
 
-def download_and_extract(urls: List[str]) -> List[Dict[str, str]]:
-    results = []
-    total = len(urls)
-    for i, url in enumerate(urls, 1):
-        html = fetch_job_page(url)
+def infer_level(title: str | None) -> str:
+    t = (title or "").lower()
+    if not t:
+        return "unknown"
+    for lbl, rx in LEVEL_RX:
+        if rx.search(t):
+            return lbl
+    return "mid"
+
+US_STATES = {"AL","AK","AZ","AR","CA","CO","CT","DE","FL","GA","HI","ID","IL","IN","IA",
+    "KS","KY","LA","ME","MD","MA","MI","MN","MS","MO","MT","NE","NV","NH","NJ","NM",
+    "NY","NC","ND","OH","OK","OR","PA","RI","SC","SD","TN","TX","UT","VT","VA","WA",
+    "WV","WI","WY"}
+CITY_STATE_RE = re.compile(r"([A-Za-z .'&/-]+),\s*(%s)\b" % "|".join(US_STATES))
+US_KEYWORDS_RE = re.compile(r"\b(united states|u\.s\.a|usa|u\.s\.|remote\s*[-–]?\s*us|remote\s+usa)\b", re.I)
+
+def infer_country_and_citystate(location: Optional[str], text: str) -> Tuple[Optional[str], Optional[str]]:
+    srcs = []
+    if location:
+        srcs.append(location)
+    if text:
+        head = "\n".join(text.split("\n")[:30])
+        srcs.append(head)
+    for s in srcs:
+        s_low = s.lower()
+        if US_KEYWORDS_RE.search(s_low):
+            mrem = re.search(r"(remote\s*[-–]?\s*us[a]?)", s_low, re.I)
+            return ("United States", "Remote - US" if mrem else None)
+        m = CITY_STATE_RE.search(s)
+        if m:
+            return ("United States", f"{m.group(1).strip()}, {m.group(2)}")
+        if ";" in s:
+            parts = [p.strip() for p in s.split(";") if p.strip()]
+            for p in parts:
+                m2 = CITY_STATE_RE.search(p)
+                if m2:
+                    return ("United States", f"{m2.group(1).strip()}, {m2.group(2)}")
+        if "united states" in s_low:
+            return ("United States", None)
+    return (None, None)
+
+# Heuristic extractor
+def heuristic_extract(raw: RawJob) -> ExtractedJob:
+    desc = raw.text if hasattr(raw, "text") else ""
+    title = raw.title
+    company = raw.company
+    location = raw.location
+    salary_min, salary_max, salary_unit, salary_currency = None, None, None, None
+    sal_match = re.search(r"\$([0-9,]+)", desc)
+    if sal_match:
+        salary_min = int(sal_match.group(1).replace(",", ""))
+        salary_unit = "annual"
+        salary_currency = "USD"
+    experience_level = infer_level(title)
+    country, city_state = infer_country_and_citystate(location, desc)
+    return ExtractedJob(
+        url=raw.url,
+        company=company,
+        title=title,
+        location=location,
+        experience_level=experience_level,
+        salary_min=salary_min,
+        salary_max=salary_max,
+        salary_unit=salary_unit,
+        salary_currency=salary_currency,
+        sector=None,
+        country=country,
+        city_state=city_state,
+        skills=[],
+        responsibilities=[],
+        qualifications=[]
+    )
+
+# Main Greenhouse scraper
+class GreenhouseScraper:
+    BASES = [
+        "https://boards.greenhouse.io/",
+        "https://job-boards.greenhouse.io/",
+    ]
+    def resolve_board(self, company: str) -> Tuple[Optional[str], Optional[str]]:
+        comp = company.lower().strip()
+        for base in self.BASES:
+            url = urljoin(base, comp)
+            html = fetch(url)
+            if html:
+                return url, html
+        return None, None
+
+    def extract_links_from_board(self, html: str, board_url: str) -> List[str]:
+        soup = BeautifulSoup(html, "html.parser")
+        links: List[str] = []
+        for a in soup.find_all("a", href=True):
+            href = a["href"].strip()
+            if not href:
+                continue
+            if re.search(r"(/job|/jobs/|gh_jid=|embed/job_app)", href):
+                links.append(urljoin(board_url, href))
+        out, seen = [], set()
+        for u in links:
+            if "greenhouse.io" not in u:
+                continue
+            if u not in seen:
+                seen.add(u)
+                out.append(u)
+        return out
+
+    def _title_matches(self, soup: BeautifulSoup, role: str) -> bool:
+        title_el = soup.find(["h1", "h2"]) or soup.find("title")
+        title_txt = (title_el.get_text(" ", strip=True).lower() if title_el else "")
+        return all(tok in title_txt for tok in role.lower().split())
+
+    def _location_text(self, soup: BeautifulSoup) -> str:
+        for cand in soup.select(".location, .posting-categories, [data-company-location], .app-title"):
+            txt = cand.get_text(" ", strip=True)
+            if txt:
+                return txt
+        return ""
+
+    def filter_links(self, links: Iterable[str], role: str, city: Optional[str], strict: bool) -> List[str]:
+        role_all = not role or role.strip().lower() == "all"
+        out: List[str] = []
+        city_q = (city or "").lower()
+        for url in links:
+            html = fetch(url)
+            if not html:
+                continue
+            soup = BeautifulSoup(html, "html.parser")
+            if not role_all and not self._title_matches(soup, role):
+                continue
+            if city:
+                loc = self._location_text(soup).lower()
+                if strict:
+                    if city_q not in loc:
+                        continue
+                else:
+                    if city_q and city_q.split(",")[0] not in loc:
+                        continue
+            out.append(url)
+            time.sleep(0.2)
+        return out
+
+    def get_all_job_urls(self, role: str, city: Optional[str], strict: bool,
+                         companies: List[str], limit: int) -> List[str]:
+        urls: List[str] = []
+        for comp in companies:
+            board_url, html = self.resolve_board(comp)
+            if not html:
+                logging.info(f"No board found for {comp}")
+                continue
+            raw_links = self.extract_links_from_board(html, board_url)
+            flinks = self.filter_links(raw_links, role, city, strict)
+            urls.extend(flinks)
+            logging.info(f"{comp}: {len(flinks)} matches")
+            if limit > 0 and len(urls) >= limit:
+                break
+            time.sleep(0.6)
+        seen, dedup = set(), []
+        for u in urls:
+            if u not in seen:
+                seen.add(u)
+                dedup.append(u)
+        return dedup if limit <= 0 else dedup[:limit]
+
+    def parse_job(self, url: str) -> Optional[RawJob]:
+        html = fetch(url)
         if not html:
-            continue
-        data = extract_fields_from_html(html)
-        data["url"] = url
-        results.append(data)
-        print(f"[{i}/{total}] ✓ {data['title'][:60]}")
-    return results
+            return None
+        soup = BeautifulSoup(html, "html.parser")
+        title_el = soup.find("h1") or soup.find("h2")
+        title = title_el.get_text(strip=True) if title_el else None
+        company = None
+        og = soup.find("meta", attrs={"property": "og:site_name"})
+        if og and og.get("content"):
+            company = og["content"].strip() or None
+        if not company:
+            path = urlparse(url).path.strip("/").split("/")
+            company = path[0] if path else None
+        location = None
+        loc_el = soup.select_one(".location, .posting-categories, [data-company-location]")
+        if loc_el:
+            location = loc_el.get_text(" ", strip=True)
+        if not location:
+            header = soup.select_one(".app-title, .opening, .opening-header, .opening-title")
+            if header:
+                maybe_loc = _norm(header.get_text(" ", strip=True))
+                if ";" in maybe_loc or "," in maybe_loc:
+                    location = maybe_loc
+        text = soup_text(soup)
+        return RawJob(url=url, company=company, title=title, location=location, html=html, text=text)
 
-
-# ======================================================================
-# MAIN
-# ======================================================================
-
+# ============ Main CLI =============
 def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--companies-yaml", default=None, help="Path to companies.yaml (optional)")
-    parser.add_argument("--limit", type=int, default=-1, help="Global max URLs (<=0 for unlimited)")
-    parser.add_argument("--s3", action="store_true", help="Enable S3 uploads")
-    parser.add_argument("--s3-bucket", default=None, help="S3 bucket name")
-    parser.add_argument("--s3-prefix", default="", help="S3 prefix (folder). Use '' for bucket root")
-    parser.add_argument("--aws-region", default="us-east-1", help="AWS region for S3 client")
-    args = parser.parse_args()
+    ap = argparse.ArgumentParser(description="Greenhouse-only scraper (role/location optional)")
+    ap.add_argument("--role", default="all", help="Role keywords (use 'all' to skip title filtering)")
+    ap.add_argument("--city", default="all", help="City text to match, or 'all' (skipped by default)")
+    ap.add_argument("--strict-location", action="store_true", help="Exact city substring match (if --city provided)")
+    ap.add_argument("--limit", type=int, default=-1, help="Max URLs to fetch overall (<=0 = unlimited)")
+    ap.add_argument("--log", default="INFO")
+    ap.add_argument("--s3-bucket", default="nexai-job-market-data", help="Target S3 bucket name")
+    ap.add_argument("--aws-region", default="us-east-1", help="AWS region for S3 client")
+    args = ap.parse_args()
+    logging.basicConfig(level=getattr(logging, args.log.upper(), logging.INFO), format="%(levelname)s: %(message)s")
+    store = S3Storage(bucket=args.s3_bucket, region=args.aws_region)
+    print(f"🪣 Using S3 storage → s3://{args.s3_bucket}/(links|raw|extracted)/...")
 
-    yaml_path = resolve_companies_yaml(args.companies_yaml)
-    companies = load_companies(yaml_path)
-    print(f"✅ Loaded {len(companies)} companies from {yaml_path}")
-
-    # choose storage
-    if args.s3:
-        if not args.s3_bucket:
-            raise SystemExit("--s3 was set but --s3-bucket is missing")
-        store = S3Storage(bucket=args.s3_bucket, prefix=args.s3_prefix, region=args.aws_region)
-        shown_prefix = (args.s3_prefix or "").rstrip("/")
-        print(f"🪣 Using S3 storage → s3://{args.s3_bucket}/{shown_prefix}")
-    else:
-        out_dir = os.path.join(os.getcwd(), "output")
-        store = LocalStorage(out_dir)
-        print(f"💾 Using local storage → {out_dir}")
-
-    print("=" * 78)
+    companies = [
+        "figma", "gitlab","robinhood","airtable","affirm","carta","checkr","earnin","gusto","mercury","buildkite","airbyte",
+        "anthropic","honehealth","springhealth66","vivian","stellarhealth","quince","mejuri","doordashusa","aninebing",
+        "coursera","degreed","cc","aircompany","weee","acommerce","bringg","oliverusa","6sense","demandbase","amplitude",
+        "dovetail","clutch","automatticcareers","netdocuments","xai","ethoslife","pieinsurance","constrafor","apeel",
+        "agoda","blockchain","fireblocks","algolia","bgeinccampus","bgeinc","dlrgroup","northmarq",
+        "dlrgroup","dataiku","point72","lilasciences","integrainterns","aef","strongholdim","samsungsemiconductor","xpengmotors",
+        "scaleai","sonyinteractiveentertainmentglobal","gofundme","spacex","lokajobs","mirakl" # Add your companies here, e.g., "figma", "gitlab", etc.
+    ]
+    role = args.role.strip() if args.role else "all"
+    city = None if (args.city or "all").lower() == "all" else args.city.strip()
+    gh = GreenhouseScraper()
+    print("\n" + "=" * 78)
     print("GREENHOUSE SCRAPER — ROLE AGNOSTIC")
     print("=" * 78)
+    print(f"\n[1/4] Scanning {len(companies)} Greenhouse boards…")
+    urls: List[str] = []
+    for comp in companies:
+        board_url, html = gh.resolve_board(comp)
+        if not html:
+            logging.info(f"No board found for {comp}")
+            continue
+        raw_links = gh.extract_links_from_board(html, board_url)
+        flinks = gh.filter_links(raw_links, role, city, args.strict_location)
+        urls.extend(flinks)
+        logging.info(f"{comp}: {len(flinks)} matches")
+        if args.limit > 0 and len(urls) >= args.limit:
+            break
+        time.sleep(0.4)
+    seen, dedup = set(), []
+    for u in urls:
+        if u not in seen:
+            seen.add(u)
+            dedup.append(u)
+    if args.limit > 0:
+        dedup = dedup[:args.limit]
+    links = {"greenhouse": dedup}
+    print(f" → {len(dedup)} URLs matched")
+    links_path = store.write_links(links, role or "all", city or "all")
+    print(f" saved: {links_path}")
 
-    urls = get_all_job_urls(companies, args.limit)
-    print(f"   → {len(urls)} URLs matched")
+    if not dedup:
+        print("No matches. Exiting.")
+        return
 
-    print("\n[2/4] Downloading postings…")
-    results = download_and_extract(urls)
+    print(f"\n[2/4] Downloading {len(dedup)} postings…")
+    raw: List[RawJob] = []
+    for i, u in enumerate(dedup, 1):
+        rj = gh.parse_job(u)
+        if rj:
+            raw.append(rj)
+            print(f" [{i}/{len(dedup)}] ✓ {rj.company or 'Unknown'} | {rj.title or 'Untitled'}")
+        time.sleep(0.25)
+    raw_path = store.write_raw(raw, role or "all", city or "all")
+    print(f" saved: {raw_path}")
 
-    # Save data: three folders at bucket root (or under --s3-prefix if provided)
-    print("\n[4/4] Writing JSONL to storage…")
-    store.save_jsonl("links_all_all.jsonl",     [{"url": u} for u in urls], folder="links",     add_date=False)
-    store.save_jsonl("raw_all_all.jsonl",       [{"html_url": u} for u in urls], folder="raw",  add_date=False)
-    store.save_jsonl("extracted_all_all.jsonl", results,                    folder="extracted", add_date=False)
+    print(f"\n[3/4] Extracting lightweight structure…")
+    extracted = [heuristic_extract(r) for r in raw]
 
-    print("\n✅ DONE")
+    print(f"\n[4/4] Writing JSON…")
+    out_path = store.write_extracted(extracted, role or "all", city or "all")
+    print(f" saved: {out_path}")
 
+    print("\n" + "=" * 78)
+    print("DONE")
+    print("=" * 78)
+    print(f"Links: {links_path}")
+    print(f"Raw HTML: {raw_path}")
+    print(f"Extracted: {out_path}")
 
 if __name__ == "__main__":
     main()

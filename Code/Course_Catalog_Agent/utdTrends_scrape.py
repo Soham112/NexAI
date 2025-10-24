@@ -52,7 +52,7 @@ from playwright.sync_api import sync_playwright, TimeoutError as PWTimeout
 # Config
 # =========================
 AWS_REGION = os.getenv("AWS_REGION", "us-east-1")
-S3_BUCKET = os.getenv("S3_BUCKET", "nexai-course-catalog")
+S3_BUCKET = os.getenv("S3_BUCKET", "nexai-course-catalog-soh")
 
 USER_AGENT = os.getenv("USER_AGENT", "UTD-CatalogBot/1.0 (+mailto:team@example.com)")
 CB_USER_AGENT = os.getenv("CB_USER_AGENT", "UTD-CourseBookBot/1.0 (+mailto:team@example.com)")
@@ -68,6 +68,22 @@ PROGRAM_URLS = [
     "https://catalog.utdallas.edu/2023/graduate/programs/jsom/information-technology-management",
     "https://catalog.utdallas.edu/2024/graduate/programs/jsom/business-analytics",
     "https://catalog.utdallas.edu/2025/graduate/programs/ecs/computer-science",
+    "https://catalog.utdallas.edu/2023/graduate/programs/jsom/accounting-analytics-ms",
+    "https://catalog.utdallas.edu/2023/graduate/programs/jsom/business-administration",
+    "https://catalog.utdallas.edu/2023/graduate/programs/jsom/energy-management",
+    "https://catalog.utdallas.edu/2023/graduate/programs/jsom/finance",
+    "https://catalog.utdallas.edu/2023/graduate/programs/jsom/financial-technology-and-analytics",
+    "https://catalog.utdallas.edu/2023/graduate/programs/jsom/healthcare-management",
+    "https://catalog.utdallas.edu/2023/graduate/programs/jsom/innovation-entrepreneurship",
+    "https://catalog.utdallas.edu/2023/graduate/programs/jsom/international-management-studies",
+    "https://catalog.utdallas.edu/2023/graduate/programs/jsom/management-science",
+    "https://catalog.utdallas.edu/2023/graduate/programs/jsom/marketing",
+    "https://catalog.utdallas.edu/2023/graduate/programs/jsom/supply-chain-management",
+    "https://catalog.utdallas.edu/2023/graduate/programs/jsom/systems-engineering-and-management/ms-sem",
+    "https://catalog.utdallas.edu/2023/graduate/programs/jsom/systems-engineering-and-management/executive-ms-sem",
+    "https://catalog.utdallas.edu/2023/graduate/programs/jsom/engineering-and-management",
+    "https://catalog.utdallas.edu/2023/graduate/programs/jsom/phd#doctor-of-philosophy-in-international-management-studies",
+    "https://catalog.utdallas.edu/2023/graduate/programs/jsom/phd#doctor-of-philosophy-in-management-science"
 ]
 
 TRENDS_BASE = "https://trends.utdnebula.com/dashboard"
@@ -86,8 +102,8 @@ def ensure_dirs(out_root: str = "data") -> Dict[str, Path]:
     raw_dir = Path(out_root) / "raw" / "catalog" / day
     clean_catalog_dir = Path(out_root) / "clean" / "catalog"
     clean_coursebook_dir = Path(out_root) / "clean" / "coursebook"
-    clean_trends_dir = Path(out_root) / "clean" / "utdtrends"
-    raw_trends_html = Path(out_root) / "raw" / "utdtrends" / "html"
+    clean_trends_dir = Path(out_root) / "clean" / "courseCatalog"
+    raw_trends_html = Path(out_root) / "raw" / "courseCatalog" / "html"
     for p in [raw_dir, clean_catalog_dir, clean_coursebook_dir, clean_trends_dir, raw_trends_html]:
         p.mkdir(parents=True, exist_ok=True)
     return {
@@ -398,8 +414,8 @@ def upload_catalog_and_trends(catalog_json: Optional[Path],
         s3_upload(catalog_json, f"clean/catalog/{catalog_json.name}")
         print(f"S3: s3://{S3_BUCKET}/clean/catalog/{catalog_json.name}")
     if trends_jsonl:
-        s3_upload(trends_jsonl, f"clean/utdtrends/{trends_jsonl.name}")
-        print(f"S3: s3://{S3_BUCKET}/clean/utdtrends/{trends_jsonl.name}")
+        s3_upload(trends_jsonl, f"clean/coursecatalog/{trends_jsonl.name}")
+        print(f"S3: s3://{S3_BUCKET}/clean/coursecatalog/{trends_jsonl.name}")
         # upload raw HTML snapshots
         for p in out_dirs["raw_trends_html"].glob("*.html"):
             s3_upload(p, f"raw/utdtrends/html/{p.name}")

@@ -102,6 +102,9 @@ Code/**/*.tmp
 **/venv/
 **/ENV/
 **/env/
+.env
+.env.*
+!.env.example
 
 # OS and editor files
 .DS_Store
