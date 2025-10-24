@@ -18,6 +18,7 @@ A modern Next.js application with AI-powered chat interface, designed to integra
 - **TypeScript Support**: Full type safety and better development experience
 - **File Management**: Support for PDF, Word documents, and text files
 - **Error Handling**: Comprehensive error handling and user feedback
+- **TypeScript Safety**: Full type safety with strict TypeScript configuration
 
 ## 📋 Prerequisites
 
@@ -333,6 +334,11 @@ All components are modular and can be easily customized:
    - Check Lambda function logs in AWS CloudWatch
    - Ensure Lambda function has S3 read permissions
    - Verify Bedrock Agent is properly configured
+
+7. **TypeScript Compilation Errors**
+   - Ensure all function parameters have explicit type annotations
+   - Check for implicit `any` types in map functions
+   - Verify error handling uses proper type guards
 
 ### Debug Mode
 Enable debug logging by setting:
