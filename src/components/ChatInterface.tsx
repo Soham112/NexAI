@@ -166,19 +166,19 @@ const ChatInterface: React.FC = () => {
           }
           
           if (analysisData.recommendedRoles && analysisData.recommendedRoles.length > 0) {
-            analysisMessage += `**🎯 Recommended Roles:**\n${analysisData.recommendedRoles.map(role => `• ${role}`).join('\n')}\n\n`
+            analysisMessage += `**🎯 Recommended Roles:**\n${analysisData.recommendedRoles.map((role: string) => `• ${role}`).join('\n')}\n\n`
           }
           
           if (analysisData.missingSkills && analysisData.missingSkills.length > 0) {
-            analysisMessage += `**🔧 Missing Skills to Develop:**\n${analysisData.missingSkills.map(skill => `• ${skill}`).join('\n')}\n\n`
+            analysisMessage += `**🔧 Missing Skills to Develop:**\n${analysisData.missingSkills.map((skill: string) => `• ${skill}`).join('\n')}\n\n`
           }
           
           if (analysisData.projectIdeas && analysisData.projectIdeas.length > 0) {
-            analysisMessage += `**💡 Project Ideas:**\n${analysisData.projectIdeas.map(project => `• ${project}`).join('\n')}\n\n`
+            analysisMessage += `**💡 Project Ideas:**\n${analysisData.projectIdeas.map((project: string) => `• ${project}`).join('\n')}\n\n`
           }
           
           if (analysisData.relevantCourses && analysisData.relevantCourses.length > 0) {
-            analysisMessage += `**📚 Relevant Courses:**\n${analysisData.relevantCourses.map(course => `• ${course}`).join('\n')}\n\n`
+            analysisMessage += `**📚 Relevant Courses:**\n${analysisData.relevantCourses.map((course: string) => `• ${course}`).join('\n')}\n\n`
           }
           
           // Add S3 key info
