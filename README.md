@@ -73,6 +73,10 @@ S3_BUCKET_NAME=your_s3_bucket_name_here
 NEXT_PUBLIC_UPLOAD_URL_ENDPOINT=/api/upload-url
 NEXT_PUBLIC_ANALYZE_ENDPOINT=your_lambda_function_url_here
 
+# Upstash Redis Cache Configuration
+UPSTASH_REDIS_REST_URL=your_upstash_redis_rest_url_here
+UPSTASH_REDIS_REST_TOKEN=your_upstash_redis_rest_token_here
+
 # Optional: Custom configurations
 NEXT_PUBLIC_APP_NAME=NexAI
 NEXT_PUBLIC_APP_VERSION=1.0.0
@@ -148,6 +152,7 @@ NexAI/
 │   ├── lib/              # Utility libraries
 │   │   ├── bedrock.ts   # AWS Bedrock client
 │   │   ├── s3.ts       # S3 client and data access
+│   │   ├── cache.ts    # Upstash Redis caching
 │   │   └── mockResponses.ts
 │   └── types/           # TypeScript type definitions
 │       └── index.ts
@@ -276,6 +281,40 @@ The system uses a **server-side proxy upload** approach:
 - **File Validation**: Comprehensive validation before upload
 - **Error Handling**: Graceful fallback for failed analysis
 
+## 💾 Upstash Redis Caching
+
+The application includes intelligent caching using Upstash Redis to optimize performance and reduce costs:
+
+### Features
+- **Persistent Cache**: Responses cached for 6 hours (21,600 seconds)
+- **Smart Normalization**: Prompt normalization to maximize cache hits
+  - Removes punctuation and extra whitespace
+  - Case-insensitive matching
+  - Handles minor variations of the same question
+- **Cost Optimization**: Reduces Lambda + Bedrock API calls
+- **Fast Response**: Cached responses return immediately
+- **Graceful Degradation**: Falls back to Lambda if Redis is unavailable
+
+### Rate Limiting
+- **3-second cooldown**: Prevents rapid-fire requests
+- **User-friendly UI**: Shows clear error messages when rate limited
+- **Auto-recovery**: Input automatically re-enabled after 3 seconds
+- **Visual feedback**: Red banner notification during rate limit
+
+### Cache Strategy
+1. User sends a prompt
+2. System normalizes the prompt (removes punctuation, lowercases, etc.)
+3. Checks Redis cache first
+4. If cached → returns instantly with `source: 'redis-cache'`
+5. If not cached → calls Lambda, stores response in cache, returns
+
+### Environment Setup
+Add these variables to your `.env.local`:
+```env
+UPSTASH_REDIS_REST_URL=your_upstash_redis_rest_url
+UPSTASH_REDIS_REST_TOKEN=your_upstash_redis_rest_token
+```
+
 ## 🎨 Customization
 
 ### Styling
@@ -340,6 +379,12 @@ All components are modular and can be easily customized:
    - Check for implicit `any` types in map functions
    - Verify error handling uses proper type guards
 
+8. **Redis Cache Not Working**
+   - Verify Upstash Redis credentials in `.env.local`
+   - Check Redis instance is active in Upstash dashboard
+   - Review console logs for Redis connection errors
+   - System gracefully falls back to Lambda if Redis is unavailable
+
 ### Debug Mode
 Enable debug logging by setting:
 ```env
@@ -351,7 +396,7 @@ DEBUG=true
 
 - **Image Optimization**: Next.js automatic image optimization
 - **Code Splitting**: Automatic code splitting by Next.js
-- **Caching**: API responses cached with appropriate headers
+- **Caching**: API responses cached with Upstash Redis (6-hour TTL)
 - **Bundle Analysis**: Run `npm run build` to analyze bundle size
 
 ## 🤝 Contributing
@@ -377,6 +422,7 @@ For support and questions:
 
 - Built with Next.js and React
 - Powered by AWS Lambda, Bedrock, and S3 services
+- Enhanced with Upstash Redis caching
 - Modern chat interface design
 
 ---
