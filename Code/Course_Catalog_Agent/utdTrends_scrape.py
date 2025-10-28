@@ -402,9 +402,99 @@ def scrape_trends_for_courses(course_ids: List[str],
 # =========================
 # Utilities
 # =========================
+def extract_tags(course_id: str, course_name: str, description: str = "") -> List[str]:
+    """Extract tags from course information."""
+    tags = [course_id]
+    
+    # Add course name words as tags (excluding common words)
+    if course_name:
+        stop_words = {"for", "and", "the", "a", "an", "in", "on", "at", "to", "with", "of"}
+        words = re.findall(r'\b[A-Z][a-z]+\b', course_name)
+        for word in words:
+            if word.lower() not in stop_words and len(word) > 3:
+                tags.append(word)
+    
+    # Extract keywords from description (capitalized words)
+    if description:
+        keywords = re.findall(r'\b[A-Z][a-z]{2,}\b', description)
+        for kw in keywords[:5]:  # Limit to 5 keywords
+            if kw not in tags:
+                tags.append(kw)
+    
+    return list(set(tags))  # Remove duplicates
+
+def format_course_record(catalog_item: Dict, trends_item: Optional[Dict] = None) -> Dict:
+    """Format course data into the requested structure."""
+    course_id = catalog_item.get("course_id", "").strip()
+    course_id_clean = course_id.replace(" ", "_")
+    
+    # Build text field
+    course_name = catalog_item.get("course_name", "")
+    description = trends_item.get("blurb", "") if trends_item else ""
+    
+    text_parts = [f"{course_id} — {course_name}"]
+    if description:
+        text_parts.append(description)
+    text = ". ".join(text_parts)
+    
+    # Extract tags
+    tags = extract_tags(course_id, course_name, description)
+    
+    # Build meta
+    meta = {
+        "url": catalog_item.get("catalog_url", trends_item.get("url", "") if trends_item else ""),
+        "scraped_at": catalog_item.get("scraped_at", iso_now()),
+        "program_title": catalog_item.get("program_title", ""),
+        "program_page": catalog_item.get("program_page", "")
+    }
+    
+    return {
+        "id": f"courses:{course_id_clean}",
+        "domain": "courses",
+        "text": text,
+        "tags": tags,
+        "meta": meta
+    }
+
+def merge_catalog_and_trends(catalog_data: List[Dict], trends_jsonl_path: Path) -> List[Dict]:
+    """Merge catalog and trends data, output in new format."""
+    # Load trends data into a dict keyed by course_id
+    trends_dict = {}
+    if trends_jsonl_path.exists():
+        with trends_jsonl_path.open("r", encoding="utf-8") as f:
+            for line in f:
+                if line.strip():
+                    item = json.loads(line.strip())
+                    cid = item.get("course_id", "").strip()
+                    if cid:
+                        trends_dict[cid.upper()] = item
+    
+    # Merge and format
+    merged = []
+    for catalog_item in catalog_data:
+        course_id = catalog_item.get("course_id", "").strip()
+        trends_item = trends_dict.get(course_id.upper())
+        
+        formatted = format_course_record(catalog_item, trends_item)
+        merged.append(formatted)
+    
+    return merged
+
 def save_catalog_courses(courses: List[Dict], clean_dir: Path) -> Path:
     out_path = clean_dir / f"courses_{date_stamp()}.json"
     out_path.write_text(json.dumps(courses, ensure_ascii=False, indent=2), encoding="utf-8")
+    return out_path
+
+def save_merged_format(merged_data: List[Dict], clean_dir: Path, as_jsonl: bool = False) -> Path:
+    """Save in new unified format."""
+    if as_jsonl:
+        out_path = clean_dir / f"courses_merged_{date_stamp()}.jsonl"
+        with out_path.open("w", encoding="utf-8") as f:
+            for item in merged_data:
+                f.write(json.dumps(item, ensure_ascii=False) + "\n")
+    else:
+        out_path = clean_dir / f"courses_merged_{date_stamp()}.json"
+        out_path.write_text(json.dumps(merged_data, ensure_ascii=False, indent=2), encoding="utf-8")
     return out_path
 
 def upload_catalog_and_trends(catalog_json: Optional[Path],
@@ -452,6 +542,7 @@ def main():
     ap.add_argument("--no-upload", action="store_true", help="Skip S3 upload.")
     ap.add_argument("--no-headless", action="store_true", help="Run Chromium with a window (debug)")
     ap.add_argument("--limit", type=int, default=None, help="Limit number of courses for trends (debug)")
+    ap.add_argument("--jsonl", action="store_true", help="Save merged output as JSONL instead of JSON")
     args = ap.parse_args()
 
     out_dirs = ensure_dirs(args.out_root)
@@ -499,9 +590,17 @@ def main():
     )
     print(f"Trends saved → {trends_jsonl_path}")
 
+    # -------- Stage C: Merge and save in new format --------
+    merged_data = merge_catalog_and_trends(courses, trends_jsonl_path)
+    merged_output_path = save_merged_format(merged_data, out_dirs["clean_trends"], as_jsonl=args.jsonl)
+    print(f"Merged format saved → {merged_output_path}")
+
     # -------- Uploads --------
     if not args.no_upload:
         upload_catalog_and_trends(catalog_json_path, trends_jsonl_path, out_dirs)
+        # Also upload merged format
+        s3_upload(merged_output_path, f"clean/courses_merged_{merged_output_path.name}")
+        print(f"S3: s3://{S3_BUCKET}/clean/courses_merged_{merged_output_path.name}")
         print("All uploads complete.")
 
 if __name__ == "__main__":

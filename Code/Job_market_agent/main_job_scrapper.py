@@ -60,6 +60,13 @@ class S3Storage:
             for j in jobs:
                 yield j.to_json()
         return self._put_lines(key, gen())
+    
+    def write_formatted(self, formatted_jobs: List[Dict], role: str, city: str) -> str:
+        """Write formatted jobs in new structure."""
+        key = "jobs_merged_all_all.json"
+        json_str = json.dumps(formatted_jobs, ensure_ascii=False, indent=2)
+        self.s3.put_object(Bucket=self.bucket, Key=key, Body=json_str.encode("utf-8"))
+        return f"s3://{self.bucket}/{key}"
 
 # ========== Data models ============
 @dataclass
@@ -183,20 +190,154 @@ def infer_country_and_citystate(location: Optional[str], text: str) -> Tuple[Opt
             return ("United States", None)
     return (None, None)
 
+# Job ID extractor from URL
+def extract_job_id(url: str) -> Optional[str]:
+    """Extract job ID from Greenhouse URL patterns."""
+    # Try to find pattern like /job/123456 or ?gh_jid=123456
+    match = re.search(r"/job/(\d+)|gh_jid=(\d+)", url)
+    if match:
+        return match.group(1) or match.group(2)
+    return None
+
+# Tag extractor for jobs
+def extract_job_tags(job: ExtractedJob) -> List[str]:
+    """Extract tags from job data."""
+    tags = []
+    
+    # Add company
+    if job.company:
+        tags.append(job.company)
+    
+    # Add location parts
+    if job.city_state:
+        parts = job.city_state.split(",")
+        for p in parts:
+            p_clean = p.strip()
+            if p_clean:
+                tags.append(p_clean)
+    
+    # Add work mode if available
+    if job.work_mode:
+        tags.append(job.work_mode)
+    
+    # Add employment type
+    if job.employment_type:
+        tags.append(job.employment_type)
+    
+    # Add experience level
+    if job.experience_level and job.experience_level != "unknown":
+        tags.append(job.experience_level.title())
+    
+    # Add key skills (limit to 5)
+    if job.skills:
+        tags.extend(job.skills[:5])
+    
+    return list(set(tags))  # Remove duplicates
+
+# Format job for new output structure
+def format_job_record(job: ExtractedJob, job_id: Optional[str] = None) -> Dict:
+    """Format job data into the requested structure."""
+    # Extract job ID from URL if not provided
+    if not job_id:
+        job_id = extract_job_id(job.url) or "unknown"
+    
+    # Build ID: jobs:company:job_id
+    company_clean = (job.company or "unknown").lower().strip().replace(" ", "-")
+    record_id = f"jobs:{company_clean}:{job_id}"
+    
+    # Build text field
+    text_parts = []
+    if job.title:
+        mode = f" ({job.work_mode})" if job.work_mode else ""
+        emp_type = f" ({job.employment_type})" if job.employment_type else ""
+        text_parts.append(f"{job.title} — {job.company}{mode}{emp_type}")
+    
+    # Add location
+    if job.city_state:
+        text_parts.append(f"Location: {job.city_state}")
+    if job.country and job.country != "United States":
+        text_parts.append(f"Country: {job.country}")
+    
+    # Add responsibilities
+    if job.responsibilities:
+        text_parts.append(f"Responsibilities: {', '.join(job.responsibilities)}")
+    
+    # Add qualifications
+    if job.qualifications:
+        text_parts.append(f"Qualifications: {', '.join(job.qualifications)}")
+    
+    # Add skills
+    if job.skills:
+        text_parts.append(f"Skills: {', '.join(job.skills)}")
+    
+    text = ". ".join(text_parts)
+    
+    # Build tags
+    tags = extract_job_tags(job)
+    
+    # Build meta object with nested salary
+    meta = {
+        "url": job.url,
+        "company": (job.company or "").lower() if job.company else None,
+        "country": job.country,
+        "city_state": job.city_state,
+        "experience_level": job.experience_level,
+        "sector": job.sector,
+        "salary": {
+            "min": job.salary_min,
+            "max": job.salary_max,
+            "unit": job.salary_unit,
+            "currency": job.salary_currency
+        }
+    }
+    
+    return {
+        "id": record_id,
+        "domain": "jobs",
+        "text": text,
+        "tags": tags,
+        "meta": meta
+    }
+
 # Heuristic extractor
 def heuristic_extract(raw: RawJob) -> ExtractedJob:
     desc = raw.text if hasattr(raw, "text") else ""
     title = raw.title
     company = raw.company
     location = raw.location
+    
+    # Extract salary information
     salary_min, salary_max, salary_unit, salary_currency = None, None, None, None
     sal_match = re.search(r"\$([0-9,]+)", desc)
     if sal_match:
         salary_min = int(sal_match.group(1).replace(",", ""))
         salary_unit = "annual"
         salary_currency = "USD"
+    
+    # Infer experience level, country, city/state
     experience_level = infer_level(title)
     country, city_state = infer_country_and_citystate(location, desc)
+    
+    # Extract work mode and employment type from text
+    work_mode = None
+    if re.search(r"\b(remote|hybrid|onsite|on-site)\b", desc, re.I):
+        if re.search(r"remote", desc, re.I):
+            work_mode = "Remote"
+        elif re.search(r"hybrid", desc, re.I):
+            work_mode = "Hybrid"
+        else:
+            work_mode = "On-site"
+    
+    employment_type = None
+    if re.search(r"\b(full.?time|fulltime|ft)\b", desc, re.I):
+        employment_type = "Full Time"
+    elif re.search(r"\b(part.?time|parttime|pt)\b", desc, re.I):
+        employment_type = "Part Time"
+    elif re.search(r"\b(contract|contractor)\b", desc, re.I):
+        employment_type = "Contract"
+    elif re.search(r"\b(intern|internship)\b", desc, re.I):
+        employment_type = "Internship"
+    
     return ExtractedJob(
         url=raw.url,
         company=company,
@@ -210,6 +351,8 @@ def heuristic_extract(raw: RawJob) -> ExtractedJob:
         sector=None,
         country=country,
         city_state=city_state,
+        work_mode=work_mode,
+        employment_type=employment_type,
         skills=[],
         responsibilities=[],
         qualifications=[]
@@ -405,10 +548,17 @@ def main():
 
     print(f"\n[3/4] Extracting lightweight structure…")
     extracted = [heuristic_extract(r) for r in raw]
+    
+    print(f"\n[3.5/4] Formatting in new structure…")
+    formatted = [format_job_record(job) for job in extracted]
 
     print(f"\n[4/4] Writing JSON…")
     out_path = store.write_extracted(extracted, role or "all", city or "all")
     print(f" saved: {out_path}")
+    
+    # Also save in new format
+    formatted_path = store.write_formatted(formatted, role or "all", city or "all")
+    print(f" saved (new format): {formatted_path}")
 
     print("\n" + "=" * 78)
     print("DONE")
@@ -416,6 +566,7 @@ def main():
     print(f"Links: {links_path}")
     print(f"Raw HTML: {raw_path}")
     print(f"Extracted: {out_path}")
+    print(f"Formatted (new structure): {formatted_path}")
 
 if __name__ == "__main__":
     main()
